@@ -84,7 +84,7 @@ async function sendVerificationEmail(email, emailVerificationToken, tokenExpirat
   const formattedExpirationTime = tokenExpirationTime.format('YYYY-MM-DD HH:mm:ss');
   const verificationLink = `${process.env.VUE_APP_FRONTEND_URL}/verify-email?token=${emailVerificationToken}`;
   const mailOptions = {
-    from: 'ewoo2821@gmail.com',
+    from: 'chishahaboy@gmail.com',
     to: email,
     subject: '이메일 인증',
     html: `<p>이메일 인증을 위해 아래 링크를 클릭해주세요.<br>해당 링크는 <strong>${formattedExpirationTime}</strong>까지 유효합니다.<br><br><span style="font-size:'30px'"><a href="${verificationLink}"  style="font-size:200%; text-decoration:none;"">인증하기</a></span></p>`
@@ -103,7 +103,7 @@ async function sendVerificationEmail(email, emailVerificationToken, tokenExpirat
 async function sendPasswordResetEmail(email, resetLink, expirationTime) {
   const formattedExpirationTime = moment(expirationTime).format('YYYY-MM-DD HH:mm:ss');
   const mailOptions = {
-    from: 'ewoo2821@gmail.com', // 발신자 이메일 주소
+    from: 'chishahaboy@gmail.com', // 발신자 이메일 주소
     to: email, // 수신자 이메일 주소
     subject: '비밀번호 재설정 요청', // 이메일 제목
     html: `

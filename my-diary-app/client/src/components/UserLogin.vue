@@ -1,7 +1,7 @@
 <template>
   <div class="login-container">
     <div class="login-box">
-      <h1 class="login-header">My Diary</h1>
+      <h1 class="login-header">홈페이지</h1>
       <div class="inputs-container">
         <div class="fields-container">
           <input type="email" placeholder="이메일" class="input-field" v-model="email" @keyup.enter="login" />
