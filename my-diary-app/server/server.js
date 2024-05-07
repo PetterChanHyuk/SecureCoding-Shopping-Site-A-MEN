@@ -178,6 +178,7 @@ async function initializeServer() {
             password VARCHAR(255) NOT NULL,
             name VARCHAR(100) NOT NULL,
             phone VARCHAR(20) NOT NULL,
+            address VARCHAR(255) NOT NULL,
             email_verified BOOLEAN NOT NULL DEFAULT FALSE,
             email_verification_token VARCHAR(255),
             token_expiration DATETIME,
@@ -242,7 +243,7 @@ async function initializeServer() {
 
   // 회원가입 라우트
   app.post('/userregister', async (req, res) => {
-    const { email, password, name, phone } = req.body;
+    const { email, password, name, phone, address } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
 
     try {
@@ -269,8 +270,8 @@ async function initializeServer() {
       const tokenExpirationTime = moment(currentTimestamp).add(3, 'hours');
 
       // 사용자 정보 저장
-      const insertQuery = 'INSERT INTO users (id, email, password, name, phone, email_verification_token, token_expiration) VALUES (?, ?, ?, ?, ?, ?, ?)';
-      await db.query(insertQuery, [userId, email, hashedPassword, name, phone, emailVerificationToken, tokenExpirationTime.format('YYYY-MM-DD HH:mm:ss')]);
+      const insertQuery = 'INSERT INTO users (id, email, password, name, phone, address, email_verification_token, token_expiration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+      await db.query(insertQuery, [userId, email, hashedPassword, name, phone, address, emailVerificationToken, tokenExpirationTime.format('YYYY-MM-DD HH:mm:ss')]);
 
       logAction(email, `Account registered with ID ${userId}`);
 

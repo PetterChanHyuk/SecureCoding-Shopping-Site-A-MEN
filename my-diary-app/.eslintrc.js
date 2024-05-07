@@ -32,5 +32,9 @@ module.exports = {
     ],
     "rules": {
         'vue/multi-word-component-names': 'off',
+        // 기존 규칙
+    },
+    "globals": {
+        "daum": "readonly" // 'daum' 전역 변수 추가
     }
 }
