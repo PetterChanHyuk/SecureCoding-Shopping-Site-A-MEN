@@ -153,20 +153,20 @@ async function initializeServer() {
     db = await mysql.createConnection(dbConfig);
     logAction('System', 'MySQL successfully connected!');
 
-    // diaryDB 데이터베이스 생성
-    const [dbCreateResult] = await db.query("CREATE DATABASE IF NOT EXISTS diaryDB");
-    // diaryDB 데이터베이스 존재 여부 확인
-    const [dbs] = await db.query("SHOW DATABASES LIKE 'diaryDB'");
+    // mallDB 데이터베이스 생성
+    const [dbCreateResult] = await db.query("CREATE DATABASE IF NOT EXISTS mallDB");
+    // mallDB 데이터베이스 존재 여부 확인
+    const [dbs] = await db.query("SHOW DATABASES LIKE 'mallDB'");
     if (dbs.length === 0) {
-      // diaryDB 데이터베이스 생성
-      await db.query("CREATE DATABASE diaryDB");
-      logAction('System', "DiaryDB created!");
+      // mallDB 데이터베이스 생성
+      await db.query("CREATE DATABASE mallDB");
+      logAction('System', "mallDB created!");
     } else {
-      logAction('System', "DiaryDB already exists!");
+      logAction('System', "mallDB already exists!");
     }
 
-    // diaryDB 데이터베이스 연결
-    await db.changeUser({ database: 'diaryDB' });
+    // mallDB 데이터베이스 연결
+    await db.changeUser({ database: 'mallDB' });
 
     // users 테이블 존재 여부 확인 및 생성
     const [usersTables] = await db.query("SHOW TABLES LIKE 'users'");
