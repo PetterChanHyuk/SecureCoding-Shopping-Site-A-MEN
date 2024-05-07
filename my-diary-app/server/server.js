@@ -153,20 +153,20 @@ async function initializeServer() {
     db = await mysql.createConnection(dbConfig);
     logAction('System', 'MySQL successfully connected!');
 
-    // diaryDB 데이터베이스 생성
-    const [dbCreateResult] = await db.query("CREATE DATABASE IF NOT EXISTS diaryDB");
-    // diaryDB 데이터베이스 존재 여부 확인
-    const [dbs] = await db.query("SHOW DATABASES LIKE 'diaryDB'");
+    // mallDB 데이터베이스 생성
+    const [dbCreateResult] = await db.query("CREATE DATABASE IF NOT EXISTS mallDB");
+    // mallDB 데이터베이스 존재 여부 확인
+    const [dbs] = await db.query("SHOW DATABASES LIKE 'mallDB'");
     if (dbs.length === 0) {
-      // diaryDB 데이터베이스 생성
-      await db.query("CREATE DATABASE diaryDB");
-      logAction('System', "DiaryDB created!");
+      // mallDB 데이터베이스 생성
+      await db.query("CREATE DATABASE mallDB");
+      logAction('System', "mallDB created!");
     } else {
-      logAction('System', "DiaryDB already exists!");
+      logAction('System', "mallDB already exists!");
     }
 
-    // diaryDB 데이터베이스 연결
-    await db.changeUser({ database: 'diaryDB' });
+    // mallDB 데이터베이스 연결
+    await db.changeUser({ database: 'mallDB' });
 
     // users 테이블 존재 여부 확인 및 생성
     const [usersTables] = await db.query("SHOW TABLES LIKE 'users'");
@@ -178,6 +178,7 @@ async function initializeServer() {
             password VARCHAR(255) NOT NULL,
             name VARCHAR(100) NOT NULL,
             phone VARCHAR(20) NOT NULL,
+            address VARCHAR(255) NOT NULL,
             email_verified BOOLEAN NOT NULL DEFAULT FALSE,
             email_verification_token VARCHAR(255),
             token_expiration DATETIME,
@@ -242,7 +243,7 @@ async function initializeServer() {
 
   // 회원가입 라우트
   app.post('/userregister', async (req, res) => {
-    const { email, password, name, phone } = req.body;
+    const { email, password, name, phone, address } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
 
     try {
@@ -269,8 +270,8 @@ async function initializeServer() {
       const tokenExpirationTime = moment(currentTimestamp).add(3, 'hours');
 
       // 사용자 정보 저장
-      const insertQuery = 'INSERT INTO users (id, email, password, name, phone, email_verification_token, token_expiration) VALUES (?, ?, ?, ?, ?, ?, ?)';
-      await db.query(insertQuery, [userId, email, hashedPassword, name, phone, emailVerificationToken, tokenExpirationTime.format('YYYY-MM-DD HH:mm:ss')]);
+      const insertQuery = 'INSERT INTO users (id, email, password, name, phone, address, email_verification_token, token_expiration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+      await db.query(insertQuery, [userId, email, hashedPassword, name, phone, address, emailVerificationToken, tokenExpirationTime.format('YYYY-MM-DD HH:mm:ss')]);
 
       logAction(email, `Account registered with ID ${userId}`);
 
