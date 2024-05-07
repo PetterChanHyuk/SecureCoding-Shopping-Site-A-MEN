@@ -103,7 +103,7 @@ async function sendVerificationEmail(email, emailVerificationToken, tokenExpirat
 async function sendPasswordResetEmail(email, resetLink, expirationTime) {
   const formattedExpirationTime = moment(expirationTime).format('YYYY-MM-DD HH:mm:ss');
   const mailOptions = {
-    from: 'ewoo2821@gmail.com', // 발신자 이메일 주소
+    from: 'chishahaboy@gmail.com', // 발신자 이메일 주소
     to: email, // 수신자 이메일 주소
     subject: '비밀번호 재설정 요청', // 이메일 제목
     html: `
