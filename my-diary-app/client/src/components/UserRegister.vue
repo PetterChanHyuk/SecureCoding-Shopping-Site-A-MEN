@@ -201,17 +201,20 @@ export default {
         })
         .catch(error => {
           // 오류 메시지 초기화
-          alert(error.response.data.message || '회원가입에 실패했습니다.')
+          let errorMessage = '회원가입에 실패했습니다.'; // 기본 오류 메시지 설정
 
           if (error.response) {
             // 서버에서 반환된 오류 메시지 처리
-            this.errorMessage = error.response.data.message;
+            errorMessage = error.response.data.message || errorMessage;
             alert(`회원가입에 실패했습니다: ${this.errorMessage}`);
           } else {
             // 서버 오류 또는 네트워크 문제로 인한 회원가입 실패
-            this.errorMessage = "서버 오류 또는 네트워크 문제로 인한 회원가입 실패";
-            alert(this.errorMessage);
+            errorMessage = "서버 오류 또는 네트워크 문제로 인한 회원가입 실패";
           }
+
+          // 오류 메시지를 표시하고 로깅
+          console.error('회원가입 실패:', errorMessage);
+          alert(errorMessage);
 
           // 폼 데이터 초기화 및 페이지 새로고침
           this.resetFormData();
