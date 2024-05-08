@@ -244,9 +244,17 @@ async function initializeServer() {
   // 회원가입 라우트
   app.post('/userregister', async (req, res) => {
     const { email, password, name, phone, address } = req.body;
-    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 필수 필드 유효성 검사
+    if (!email || !password || !name || !phone || !address) {
+      // 클라이언트에서 메시지를 처리하도록 오류 코드만 전송
+      return res.status(400).send({ error: 'missing_fields' });
+    }
 
     try {
+      // 비밀번호 해싱
+      const hashedPassword = await bcrypt.hash(password, 10);
+
       // 고유 사용자 ID 생성
       let userId;
       let isUnique = false;
@@ -264,7 +272,7 @@ async function initializeServer() {
         return res.status(409).send({ message: '이미 사용 중인 이메일 주소입니다.' });
       }
 
-      // 이메일 인증 토큰 생성
+      // 이메일 인증 토큰 생성 및 만료 시간 설정
       const emailVerificationToken = generateEmailVerificationToken();
       const currentTimestamp = getCurrentTimestamp();
       const tokenExpirationTime = moment(currentTimestamp).add(3, 'hours');
