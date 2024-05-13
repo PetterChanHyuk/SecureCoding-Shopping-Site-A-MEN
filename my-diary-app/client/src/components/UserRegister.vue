@@ -10,14 +10,15 @@
       </div>
       <div>
         <label for="password">비밀번호:</label>
-        <input type="password" id="password" v-model="userData.password" @input="validatePassword" :class="{ 'is-invalid': !isPasswordEntered, 'is-valid': isPasswordEntered }" required>
-        <p v-if="!isPasswordEntered" class="warning-text">비밀번호를 입력해주세요.</p>
+        <input type="password" id="password" v-model="userData.password" @input="validatePassword" :class="{ 'is-invalid': !isPasswordValid, 'is-valid': isPasswordValid }" required>
+        <p v-if="!isPasswordValid && isPasswordEntered" class="warning-text">{{ errorMessage }}</p>
       </div>
       <div>
         <label for="confirmPassword">비밀번호 확인:</label>
-        <input type="password" id="confirmPassword" v-model="confirmPassword" @input="validatePassword" :class="{ 'is-invalid': !isPasswordValid, 'is-valid': isPasswordValid && confirmPassword }" required>
+        <input type="password" id="confirmPassword" v-model="confirmPassword" @input="validatePassword" :class="{ 'is-invalid': !isPasswordMatch, 'is-valid': isPasswordValid && confirmPassword }" required>
         <p v-if="!isPasswordMatch && confirmPassword" class="warning-text">비밀번호가 일치하지 않습니다.</p>
       </div>
+
       <div>
         <label for="name">이름:</label>
         <input type="text" id="name" v-model="userData.name" @input="validateName" :class="{ 'is-invalid': !isNameValid, 'is-valid': isNameValid }" required>
@@ -124,10 +125,17 @@ export default {
     },
     // 비밀번호 필드에 대한 유효성 검사
     validatePassword() {
+      const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
       this.isPasswordEntered = this.userData.password.length > 0;
       this.isPasswordMatch = this.userData.password === this.confirmPassword;
-      this.isPasswordValid = this.isPasswordEntered && this.isPasswordMatch;
+      this.isPasswordValid = passwordPattern.test(this.userData.password);
+      if (!this.isPasswordValid && this.isPasswordEntered) {
+        this.errorMessage = '비밀번호는 8자 이상이며, 대소문자, 숫자, 특수문자를 포함해야 합니다.';
+      } else {
+        this.errorMessage = '';
+      }
     },
+
     // 이름 필드에 대한 유효성 검사
     validateName() {
       this.isNameValid = this.userData.name.length > 0;
