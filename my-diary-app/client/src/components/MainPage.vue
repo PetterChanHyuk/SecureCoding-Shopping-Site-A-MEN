@@ -1,7 +1,7 @@
 <template>
-  <div class="main-page">
-    <!-- 메인 헤더 -->
-    <div class="main-header">
+  <div id="app">
+    <header>
+      <h1 @click="refreshPage">108번가</h1> <!-- 클릭 이벤트 추가 -->
       <!-- 남은 시간 타이머 -->
       <div class="timer">자동 로그아웃: {{ remainingTime }}초</div>
       <!-- 사용자 정보, 마이페이지 및 로그아웃 링크 -->
@@ -10,71 +10,101 @@
         <router-link to="/mypage">마이페이지</router-link> |
         <a href="#" @click="logout">로그아웃</a>
       </div>
-    </div>
-
-    <!-- 메인 컨테이너 -->
-    <div class="main-container">
-      <div class="diary-section">
-        <!-- 날짜 선택 -->
-        일자 : <input type="date" v-model="selectedDate" @change="fetchDiary">
-        <hr>
-        <!-- 일기장 표시 -->
-        <div v-if="diaryContent" class="diary-content">
-          <div v-html="formattedDiaryContent"></div>
-          <br><br>
-          <button @click="editDiary">수정</button>
-          <button @click="deleteDiary">삭제</button>
-        </div>
-        <div v-else class="empty-diary">
-          <textarea v-model="newDiaryContent" cols="50" rows="20"></textarea>
-          <br>
-          <button @click="saveDiary">저장</button>
+      <button @click="login">로그인</button>
+    </header>
+    <main>
+      <div>
+        <input type="text" v-model="searchQuery" placeholder="Search for items..." />
+        <button @click="search">검색</button>
+      </div>
+      <div class="category-container">
+        <button 
+          :class="{'active': selectedCategory === null}" 
+          @click="filterByCategory(null)">
+          전체
+        </button>
+        <button 
+          v-for="category in categories" 
+          :key="category.id" 
+          @click="filterByCategory(category)"
+          :class="{'active': selectedCategory === category}">
+          {{ category.name }}
+        </button>
+      </div>
+      <div class="item-container">
+        <div v-for="item in filteredItems" :key="item.id" class="item">
+          <div class="item-content">{{ item.name }}</div>
         </div>
       </div>
-
-      <!-- 최근 작성한 일기 섹션 -->
-      <div class="recent-diaries">
-        <h3>RECENT</h3>
-        <hr>
-        <div class="diary-list">
-          <div v-for="date in recentDiaryDates" :key="date" class="diary-date" :class="{ 'diary-date-selected': isDateSelected(date) }" @click="selectDiaryDate(date)">
-            {{ formatDate(date) }}
-          </div>
-        </div>
-      </div>
-    </div>
+    </main>
   </div>
 </template>
-  
+
 <script>
 import axios from 'axios';
-import moment from 'moment';
 
 export default {
+  name: 'MainPage',
   data() {
     return {
       userName: '익명',
-      selectedDate: this.getCurrentDateInKST(),
-      diaryContent: null,
-      newDiaryContent: '',
-      recentDiaryDates: [], // 최근 작성한 일기 날짜 배열
       remainingTime: 600, // 초단위 (10분)
-      timer: null
+      timer: null,
+      searchQuery: '', // 입력 필드의 값을 저장
+      filteredQuery: '', // 실제로 필터링에 사용되는 값을 저장
+      selectedCategory: null, // 선택된 카테고리를 저장
+      categories: [
+        { id: 1, name: '카테고리 1' },
+        { id: 2, name: '카테고리 2' },
+        { id: 3, name: '카테고리 3' },
+        { id: 4, name: '카테고리 4' },
+      ],
+      items: [
+        { id: 1, name: 'Item 1', category: 1 },
+        { id: 2, name: 'Item 2', category: 2 },
+        { id: 3, name: 'Item 3', category: 3 },
+        { id: 4, name: 'Item 4', category: 4 },
+        { id: 5, name: 'Item 5', category: 1 },
+        { id: 6, name: 'Item 6', category: 2 },
+        { id: 7, name: 'Item 7', category: 3 },
+        { id: 8, name: 'Item 8', category: 4 },
+        { id: 9, name: 'Item 9', category: 1 },
+        { id: 10, name: 'Item 10', category: 2 },
+        { id: 11, name: 'Item 11', category: 3 },
+        { id: 12, name: 'Item 12', category: 4 },
+        { id: 13, name: 'Item 13', category: 1 },
+        { id: 14, name: 'Item 14', category: 2 },
+        { id: 15, name: 'Item 15', category: 3 },
+        { id: 16, name: 'Item 16', category: 4 },
+        { id: 17, name: 'Item 17', category: 1 },
+        { id: 18, name: 'Item 18', category: 2 },
+        { id: 19, name: 'Item 19', category: 3 },
+        { id: 20, name: 'Item 20', category: 4 },
+      ]
     };
   },
   computed: {
-    formattedDiaryContent() {
-      return this.diaryContent.replace(/\n/g, '<br>'); // 개행 문자를 <br> 태그로 변환
+    filteredItems() {
+      return this.items.filter(item => {
+        const matchesQuery = item.name.toLowerCase().includes(this.filteredQuery.toLowerCase());
+        const matchesCategory = this.selectedCategory ? item.category === this.selectedCategory.id : true;
+        return matchesQuery && matchesCategory;
+      });
     }
   },
   methods: {
-    getCurrentDateInKST() {
-      const now = new Date();
-      const utc = now.getTime() + (now.getTimezoneOffset() * 60000); // UTC 시간
-      const kstTime = new Date(utc + (3600000 * 9)); // UTC+9
-      return kstTime.toISOString().split('T')[0];
+    login() {
+      alert('로그인 버튼 클릭!');
     },
-
+    search() {
+      this.filteredQuery = this.searchQuery; // 검색 버튼 클릭 시 filteredQuery 업데이트
+    },
+    refreshPage() {
+      window.location.reload(); // 페이지 새로고침
+    },
+    filterByCategory(category) {
+      this.selectedCategory = category;
+    },
     resetTimer() {
       this.remainingTime = 600; // 타이머를 10분으로 재설정
     },
@@ -102,23 +132,6 @@ export default {
       }
     },
 
-    handleBeforeUnload() {
-      this.logout();
-    },
-
-    handleDateSelect(date) {
-      // 날짜를 선택하면 해당 날짜로 설정
-      this.selectedDate = date;
-      // 일기장 날짜를 선택한 날짜로 갱신
-      this.fetchDiary();
-    },
-
-    editDiary() {
-      // 수정 모드 활성화
-      this.newDiaryContent = this.diaryContent;
-      this.diaryContent = null;
-    },
-
     fetchUserName() {
       axios.get(`${process.env.VUE_APP_BACKEND_URL}/username`, {
           params: {
@@ -131,109 +144,12 @@ export default {
       .catch(error => {
           console.error('Error fetching user name:', error);
       });
-    },
-
-    fetchDiary() {
-      // 날짜 변경 시 기존 일기 내용 초기화
-      this.diaryContent = null;
-      this.newDiaryContent = '';
-
-      const userId = localStorage.getItem('userId');
-      axios.get(`${process.env.VUE_APP_BACKEND_URL}/diary/${this.selectedDate}`, {
-        params: { userId }
-      })
-      .then(response => {
-        // 해당 날짜의 일기 내용이 존재하는 경우
-        this.diaryContent = response.data.content;
-      })
-      .catch(error => {
-        if (error.response && error.response.status === 404) {
-          // 해당 날짜에 일기가 없는 경우
-          this.diaryContent = null;
-        } else {
-          console.error('Error fetching diary:', error);
-        }
-      });
-    },
-
-    saveDiary() {
-      const userId = localStorage.getItem('userId');
-      axios.post(`${process.env.VUE_APP_BACKEND_URL}/savediary`, {
-        user_id: userId,
-        date: this.selectedDate,
-        content: this.newDiaryContent
-      })
-      .then(() => {
-        this.diaryContent = this.newDiaryContent;
-        this.newDiaryContent = '';
-        alert('일기가 저장되었습니다.');
-        this.fetchRecentDiaries();
-      })
-      .catch(error => {
-        console.error('Error saving diary:', error);
-      });
-    },
-
-    deleteDiary() {
-      if (confirm('일기를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
-        axios.delete(`${process.env.VUE_APP_BACKEND_URL}/diary/${this.selectedDate}`, {
-          params: { userId: localStorage.getItem('userId') }
-        })
-        .then(() => {
-          alert('일기가 삭제되었습니다.');
-          this.diaryContent = null; // 일기 내용 초기화
-          this.fetchRecentDiaries(); // 최근 일기 날짜 목록 갱신
-        })
-        .catch(error => {
-          console.error('Error deleting diary:', error);
-          alert('일기 삭제에 실패했습니다.');
-        });
-      }
-    },
-
-    // 최근 작성된 일기 날짜 가져오기
-    fetchRecentDiaries() {
-      axios.get(`${process.env.VUE_APP_BACKEND_URL}/recent-diaries`, {
-        params: { userId: localStorage.getItem('userId') }
-      })
-      .then(response => {
-        this.recentDiaryDates = response.data.dates; // 서버에서 반환된 날짜 배열
-      })
-      .catch(error => {
-        console.error('Error fetching recent diaries:', error);
-      });
-    },
-
-    formatDate(date) {
-      return moment(date).format('YYYY-MM-DD');
-    },
-
-    selectDiaryDate(date) {
-      // 날짜 형식 변환
-      const formattedDate = moment(date).format('YYYY-MM-DD');
-      this.selectedDate = formattedDate;
-      this.fetchDiary();
-    },
-
-    isDateSelected(date) {
-      const formattedDate = moment(date).format('YYYY-MM-DD');
-      return formattedDate === this.selectedDate;
-    },
+    }
   },
 
   created() {
     this.fetchUserName(); // 컴포넌트 생성 시 사용자 이름 조회
-    this.fetchRecentDiaries(); // 컴포넌트 생성 시 최근 일기 날짜 조회
-    axios.get(`${process.env.VUE_APP_BACKEND_URL}/current-kst-date`)
-    .then(response => {
-      this.selectedDate = response.data.date;
-      this.fetchDiary(); // 컴포넌트 생성 시 일기장 조회
-    })
-    .catch(error => {
-      console.error('Error fetching current KST date:', error);
-      this.fetchDiary(); // 컴포넌트 생성 시 일기장 조회
-    });
-
+    
     // 로컬 스토리지에서 사용자 ID 확인
     const userId = localStorage.getItem('userId');
 
@@ -257,141 +173,72 @@ export default {
   }
 };
 </script>
-  
+
 <style>
-  .main-page {
-    padding: 20px;
-    max-width: 600px; /* 메인 페이지 최대 너비 조정 */
-    margin: auto;
-  }
-
-  .main-header {
-    display: flex;
-    justify-content: space-between; /* 좌우 균등 정렬 */
-    margin-bottom: 10px;
-  }
-
-  .timer {
-    text-align: left; /* 좌측 정렬 */
-  }
-
-  .user-info {
-    text-align: right; /* 우측 정렬 */
-  }
-  .main-container {
-    display: flex;
-    margin-top: 20px;
-    padding: 20px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  }
-
-  .diary-section {
-    flex: 80%; /* 메인 컨테이너 좌측 85% 너비 할당 */
-  }
-
-  .empty-diary {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 10px;
-  }
-
-  .recent-diaries {
-    flex: 20%; /* 메인 컨테이너 우측 15% 너비 할당 */
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    border-left: 1px solid #ddd;
-    height: 380px;
-    overflow-y: auto; /* 내용이 넘칠 경우 스크롤 */
-  }
-
-  .recent-diaries h3 {
-    margin-top: 0px;
-    margin-bottom: 1px;
-  }
-
-  .recent-diaries hr {
-    width: 100%;
-    border-top: 1px solid gray;
-  }
-
-  .diary-date {
-    cursor: pointer;
-    text-align: center;
-    padding: 5px;
-    border: 1px solid #eee;
-    border-radius: 20px;
-    margin-bottom: 5px;
-    word-break: break-all;
-    width: auto;
-    background-color: rgb(198, 229, 240);
-    font-size: 13px;
-  }
-
-  .diary-date-selected {
-    background-color: rgb(101, 185, 219);
-  }
-
-  .diary-date:hover {
-    background-color: rgb(101, 185, 219);
-  }
-
-  button {
-    margin: 5px 5px;
-  }
-
-  /* 모바일 화면용 스타일 */
-  @media (max-width: 600px) {
-    .main-container {
-      flex-direction: column;
-    }
-
-    .diary-section, .recent-diaries {
-      width: 100%;
-      flex: none;
-      padding-left: 0;
-      padding-right: 0;
-    }
-
-    .empty-diary textarea {
-      width: 100%;
-      box-sizing: border-box;
-      padding: 10px;
-    }
-
-    .recent-diaries {
-      margin-top: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      border: 1px solid;
-    }
-
-    .recent-diaries h3 {
-      margin-top: 10px;
-      margin-bottom: 0px;
-    }
-
-    .recent-diaries hr {
-      width: 100%;
-      border-top: 1px solid gray;
-    }
-
-    .diary-date {
-      cursor: pointer;
-      text-align: center;
-      padding: 5px;
-      border: 1px solid #eee;
-      border-radius: 20px;
-      margin-bottom: 5px;
-      word-break: break-all;
-      width: auto;
-      background-color: rgb(198, 229, 240);
-      font-size: 13px;
-    }
-
-    button {
-      margin: 5px 5px;
-    }
-  }
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+#app {
+  text-align: center;
+}
+header {
+  background-color: #f8f9fa;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+h1 {
+  margin: 0;
+  cursor: pointer; /* 클릭 가능한 커서 */
+}
+main {
+  padding: 20px;
+}
+input {
+  padding: 10px;
+  font-size: 16px;
+  margin-right: 10px;
+}
+button {
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  margin: 5px;
+}
+button.active {
+  background-color: #007bff;
+  color: white;
+}
+.category-container {
+  margin: 20px 0;
+}
+.item-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.item {
+  background-color: #e9ecef;
+  margin: 10px;
+  padding: 10px;
+  font-size: 18px;
+  width: calc(25% - 20px); /* 4 columns with margin */
+  box-sizing: border-box;
+  position: relative;
+  /* 정사각형을 만들기 위해 추가된 스타일 */
+}
+.item::before {
+  content: "";
+  display: block;
+  padding-bottom: 100%; /* 1:1 비율을 위해 */
+}
+.item-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
 </style>

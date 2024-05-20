@@ -460,52 +460,6 @@ async function initializeServer() {
     }
   });
 
-  // 일기저장 라우트
-  app.post('/savediary', async (req, res) => {
-    const { user_id, date, content } = req.body;
-    const encryptedContent = encrypt(content);
-
-    try {
-      const [selectResults] = await db.query('SELECT * FROM diaries WHERE user_id = ? AND date = ?', [user_id, date]);
-
-      if (selectResults.length > 0) {
-        // 일기가 이미 존재하면 업데이트
-        await db.query('UPDATE diaries SET content = ? WHERE user_id = ? AND date = ?', [encryptedContent, user_id, date]);
-        logAction(user_id, `SaveDiary request: Diary updated successfully`);
-        res.status(200).send({ message: 'Diary updated successfully' });
-      } else {
-        // 새 일기 삽입
-        await db.query('INSERT INTO diaries (user_id, date, content) VALUES (?, ?, ?)', [user_id, date, encryptedContent]);
-        logAction(user_id, `SaveDiary request: Diary saved successfully`);
-        res.status(200).send({ message: 'Diary saved successfully' });
-      }
-    } catch (err) {
-      logAction(user_id, `SaveDiary request error: ${err.message}`);
-      return res.status(500).send({ message: 'Error saving diary' });
-    }
-  });
-
-  // 특정 날짜의 일기 조회 라우트
-  app.get('/diary/:date', async (req, res) => {
-    const userId = req.query.userId;
-    const date = req.params.date;
-
-    try {
-      const [results] = await db.query('SELECT * FROM diaries WHERE user_id = ? AND date = ?', [userId, date]);
-
-      if (results.length === 0) {
-        logAction(userId, `SearchDiary request: no contents on this date`);
-        return res.status(404).send({ message: 'Diary not found for this date' });
-      }
-
-      const decryptedContent = decrypt(results[0].content);
-      res.send({ content: decryptedContent });
-    } catch (err) {
-      logAction(userId, `SearchDiary request error: ${err.message}`);
-      return res.status(500).send({ message: 'Server error' });
-    }
-  });
-
   // 계정 찾기 라우트
   app.post('/findAccount', async (req, res) => {
     const { name, phone } = req.body;
@@ -656,55 +610,6 @@ async function initializeServer() {
     } catch (err) {
       logAction(userId, `Userinfo request error: ${err.message}`);
       return res.status(500).send({ message: 'Server error' });
-    }
-  });
-
-  // 현재 시간을 클라이언트로 전송 라우트
-  app.get('/current-kst-date', (req, res) => {
-    const kstDate = moment().tz('Asia/Seoul').format('YYYY-MM-DD');
-    res.send({ date: kstDate });
-  });
-
-  // 최근 작성한 일기 날짜 조회 라우트
-  app.get('/recent-diaries', async (req, res) => {
-    const userId = req.query.userId;
-
-    try {
-      // 사용자의 최근 일기 날짜를 diary_id 기준 내림차순으로 조회
-      const [diaries] = await db.query(`
-        SELECT date FROM diaries 
-        WHERE user_id = ? 
-        ORDER BY diary_id DESC 
-        LIMIT 30
-      `, [userId]);
-
-      // 날짜만 추출하여 배열로 반환
-      const dates = diaries.map(diary => diary.date);
-      res.send({ dates });
-    } catch (err) {
-      console.error(`Error fetching recent diaries for user ${userId}: ${err.message}`);
-      res.status(500).send({ message: 'Server error' });
-    }
-  });
-
-  // 일기 삭제 라우트
-  app.delete('/diary/:date', async (req, res) => {
-    const userId = req.query.userId;
-    const date = req.params.date;
-
-    try {
-      const [result] = await db.query('DELETE FROM diaries WHERE user_id = ? AND date = ?', [userId, date]);
-
-      if (result.affectedRows > 0) {
-        logAction(userId, `Diary deleted for date: ${date}`);
-        res.status(200).send({ message: 'Diary successfully deleted' });
-      } else {
-        logAction(userId, `No diary found to delete for date: ${date}`);
-        res.status(404).send({ message: 'No diary found for this date' });
-      }
-    } catch (err) {
-      logAction(userId, `Error deleting diary: ${err.message}`);
-      res.status(500).send({ message: 'Server error' });
     }
   });
 

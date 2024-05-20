@@ -1,7 +1,7 @@
 <template>
   <div class="login-container">
     <div class="login-box">
-      <h1 class="login-header">홈페이지</h1>
+      <h1 class="login-header">108번가</h1>
       <div class="inputs-container">
         <div class="fields-container">
           <input type="email" placeholder="이메일" class="input-field" v-model="email" @keyup.enter="login" />
@@ -39,7 +39,7 @@
       axios.post(`${process.env.VUE_APP_BACKEND_URL}/userlogin`, userData)
         .then(response => {
           // 로그인 성공
-          alert("My Diary에 오신 것을 환영합니다.");
+          alert("108번가에 오신 것을 환영합니다.");
           console.log('로그인 성공:', response.data);
           localStorage.setItem('userId', response.data.userId);
           router.push('/mainpage');
