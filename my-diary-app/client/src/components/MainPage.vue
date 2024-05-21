@@ -32,8 +32,8 @@
         <div v-for="item in filteredItems" :key="item.id" class="item">
           <img :src="getImageUrl(item.image_url)" alt="Item Image" class="item-image" />
           <div class="item-details">
-            <h3>{{ item.name }}</h3>
-            <p>{{ item.description }}</p>
+            <h3>{{ escapeHtml(item.name) }}</h3>
+            <p>{{ escapeHtml(item.description) }}</p>
           </div>
         </div>
       </div>
@@ -43,6 +43,7 @@
 
 <script>
 import axios from 'axios';
+import escapeHtml from 'escape-html';
 
 export default {
   name: 'MainPage',
@@ -55,19 +56,28 @@ export default {
       filteredQuery: '',
       selectedCategory: null,
       categories: [],
-      items: []
+      items: [],
+      csrfToken: '' // CSRF 토큰 추가
     };
   },
   computed: {
     filteredItems() {
       return this.items.filter(item => {
-        const matchesQuery = item.name.toLowerCase().includes(this.filteredQuery.toLowerCase());
+        const matchesQuery = escapeHtml(item.name.toLowerCase()).includes(this.filteredQuery.toLowerCase());
         const matchesCategory = this.selectedCategory ? item.category_id === this.selectedCategory.id : true;
         return matchesQuery && matchesCategory;
       });
     }
   },
   methods: {
+    async fetchCsrfToken() {
+      try {
+        const response = await axios.get(`${process.env.VUE_APP_BACKEND_URL}/csrf-token`);
+        this.csrfToken = response.data.csrfToken;
+      } catch (error) {
+        console.error('Failed to fetch CSRF token:', error);
+      }
+    },
     getImageUrl(imageUrl) {
       return `${process.env.VUE_APP_BACKEND_URL}/${imageUrl}`;
     },
@@ -92,57 +102,54 @@ export default {
         this.logout();
       }
     },
-    logout() {
+    async logout() {
       clearInterval(this.timer);
       const userId = localStorage.getItem('userId');
       if (userId) {
-        axios.post(`${process.env.VUE_APP_BACKEND_URL}/userlogout`, { userId })
-          .then(() => {
-            localStorage.removeItem('userId');
-            this.$router.push('/userlogin');
-          })
-          .catch(error => {
-            console.error('로그아웃 실패:', error);
+        try {
+          await axios.post(`${process.env.VUE_APP_BACKEND_URL}/userlogout`, { userId }, {
+            headers: { 'X-CSRF-Token': this.csrfToken }
           });
+          localStorage.removeItem('userId');
+          this.$router.push('/userlogin');
+        } catch (error) {
+          console.error('로그아웃 실패:', error);
+        }
       }
     },
-    fetchUserName() {
-      axios.get(`${process.env.VUE_APP_BACKEND_URL}/username`, {
-          params: {
-          userId: localStorage.getItem('userId')
-          }
-      })
-      .then(response => {
-          this.userName = response.data.name;
-      })
-      .catch(error => {
-          console.error('Error fetching user name:', error);
-      });
-    },
-    fetchCategories() {
-      axios.get(`${process.env.VUE_APP_BACKEND_URL}/categories`)
-        .then(response => {
-          this.categories = response.data;
-        })
-        .catch(error => {
-          console.error('Error fetching categories:', error);
+    async fetchUserName() {
+      try {
+        const response = await axios.get(`${process.env.VUE_APP_BACKEND_URL}/username`, {
+          params: { userId: localStorage.getItem('userId') }
         });
+        this.userName = response.data.name;
+      } catch (error) {
+        console.error('Error fetching user name:', error);
+      }
     },
-    fetchItems() {
+    async fetchCategories() {
+      try {
+        const response = await axios.get(`${process.env.VUE_APP_BACKEND_URL}/categories`);
+        this.categories = response.data;
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    },
+    async fetchItems() {
       const params = {
         searchQuery: this.searchQuery,
         categoryId: this.selectedCategory ? this.selectedCategory.id : null
       };
-      axios.get(`${process.env.VUE_APP_BACKEND_URL}/items`, { params })
-        .then(response => {
-          this.items = response.data;
-        })
-        .catch(error => {
-          console.error('Error fetching items:', error);
-        });
+      try {
+        const response = await axios.get(`${process.env.VUE_APP_BACKEND_URL}/items`, { params });
+        this.items = response.data;
+      } catch (error) {
+        console.error('Error fetching items:', error);
+      }
     }
   },
-  created() {
+  async created() {
+    await this.fetchCsrfToken(); // 컴포넌트 생성 시 CSRF 토큰 가져오기
     this.fetchUserName();
     this.fetchCategories();
     this.fetchItems();
