@@ -9,6 +9,8 @@ const nodemailer = require('nodemailer');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const csurf = require('csurf');
+const cookieParser = require('cookie-parser');
 
 // 타임스탬프 함수
 const moment = require('moment-timezone');
@@ -274,7 +276,14 @@ async function initializeServer() {
     credentials: true
   }));
   app.use(bodyParser.json());
+  app.use(cookieParser()); // CSRF 보호를 위해 쿠키 파서 추가
+  app.use(csurf({ cookie: true })); // CSRF 미들웨어 추가
   app.use('/uploads', express.static(uploadDir));
+
+  // CSRF 토큰을 클라이언트에 전달하는 라우트
+  app.get('/csrf-token', (req, res) => {
+    res.json({ csrfToken: req.csrfToken() });
+  });
 
   // 파일 업로드 라우트
   app.post('/upload', upload.single('file'), async (req, res) => {
