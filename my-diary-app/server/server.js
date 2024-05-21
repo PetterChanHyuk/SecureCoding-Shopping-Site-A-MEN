@@ -6,6 +6,9 @@ const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 // 타임스탬프 함수
 const moment = require('moment-timezone');
@@ -141,6 +144,8 @@ async function deleteExpiredAccounts(db) {
 
 // 서버 초기화 및 데이터베이스 설정
 async function initializeServer() {
+  const uploadDir = path.join(__dirname, 'uploads');  // 이미지 업로드 경로 설정
+
   try {
     // 데이터베이스 연결 설정
     const dbConfig = {
@@ -191,21 +196,37 @@ async function initializeServer() {
       logAction('System', "Table 'users' already exists!");
     }
 
-    // diaries 테이블 존재 여부 확인 및 생성
-    const [diariesTables] = await db.query("SHOW TABLES LIKE 'diaries'");
-    if (diariesTables.length === 0) {
-      const createDiariesTable = `
-        CREATE TABLE diaries (
-            diary_id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT,
-            date DATE,
-            content TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id)
+    // categories 테이블 존재 여부 확인 및 생성
+    const [categoriesTables] = await db.query("SHOW TABLES LIKE 'categories'");
+    if (categoriesTables.length === 0) {
+      const createCategoriesTable = `
+        CREATE TABLE categories (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL
         )`;
-      await db.query(createDiariesTable);
-      logAction('System', "Table 'diaries' created!");
+      await db.query(createCategoriesTable);
+      logAction('System', "Table 'categories' created!");
     } else {
-      logAction('System', "Table 'diaries' already exists!");
+      logAction('System', "Table 'categories' already exists!");
+    }
+
+    // items 테이블 존재 여부 확인 및 생성
+    const [itemsTables] = await db.query("SHOW TABLES LIKE 'items'");
+    if (itemsTables.length === 0) {
+      const createItemsTable = `
+        CREATE TABLE items (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          category_id INT,
+          description TEXT,
+          user_id INT,
+          image_url VARCHAR(255), -- 이미지 URL 필드 추가
+          FOREIGN KEY (category_id) REFERENCES categories(id)
+        )`;
+      await db.query(createItemsTable);
+      logAction('System', "Table 'items' created!");
+    } else {
+      logAction('System', "Table 'items' already exists!");
     }
 
     // password_reset_tokens 테이블 생성
@@ -232,6 +253,19 @@ async function initializeServer() {
     logAction('System', `Failed to initialize server: ${err.message}`);
   }
 
+  // Multer 설정
+  const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir);
+      }
+      cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+      cb(null, Date.now() + path.extname(file.originalname)); // 파일 이름 설정
+    }
+  });
+  const upload = multer({ storage: storage });
 
   // Express 앱 설정
   const app = express();
@@ -240,6 +274,104 @@ async function initializeServer() {
     credentials: true
   }));
   app.use(bodyParser.json());
+  app.use('/uploads', express.static(uploadDir));
+
+  // 파일 업로드 라우트
+  app.post('/upload', upload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).send({ message: 'No file uploaded' });
+      }
+      const filePath = path.join('uploads', req.file.filename);
+      res.status(200).send({ filePath });
+    } catch (err) {
+      console.error(`File upload error: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 아이템 조회 라우트
+  app.get('/items/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+      const [items] = await db.query('SELECT * FROM items WHERE id = ?', [id]);
+      if (items.length === 0) {
+        return res.status(404).send({ message: 'Item not found' });
+      }
+      res.send(items[0]);
+    } catch (err) {
+      logAction('System', `Failed to fetch item: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  app.put('/items/:id', async (req, res) => {
+    const { id } = req.params;
+    const { name, categoryId, imageUrl, description, userId } = req.body;
+  
+    if (!name || !categoryId || !userId) {
+      return res.status(400).send({ message: 'Missing name, categoryId, or userId' });
+    }
+  
+    try {
+      const [result] = await db.query('SELECT * FROM items WHERE id = ?', [id]);
+      if (result.length === 0) {
+        return res.status(404).send({ message: 'Item not found' });
+      }
+      if (result[0].user_id !== parseInt(userId, 10)) {
+        return res.status(403).send({ message: 'Unauthorized' });
+      }
+  
+      const updateQuery = 'UPDATE items SET name = ?, category_id = ?, image_url = ?, description = ? WHERE id = ?';
+      await db.query(updateQuery, [name, categoryId, imageUrl, description, id]);
+      res.status(200).send({ message: 'Item updated successfully' });
+    } catch (err) {
+      console.error(`Failed to update item: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 아이템 삭제 라우트
+  app.delete('/items/:id', async (req, res) => {
+    const { id } = req.params;
+    const { userId } = req.body;
+
+    try {
+      const [result] = await db.query('SELECT * FROM items WHERE id = ?', [id]);
+      if (result.length === 0) {
+        return res.status(404).send({ message: 'Item not found' });
+      }
+      if (result[0].user_id !== parseInt(userId, 10)) {
+        return res.status(403).send({ message: 'Unauthorized' });
+      }
+
+      await db.query('DELETE FROM items WHERE id = ?', [id]);
+      res.status(200).send({ message: 'Item deleted successfully' });
+    } catch (err) {
+      console.error(`Failed to delete item: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 아이템 추가 라우트에 설명 필드 추가
+  app.post('/items', async (req, res) => {
+    const { name, categoryId, imageUrl, description, userId } = req.body;
+
+    if (!name || !categoryId || !userId) {
+      console.error('Missing name, categoryId, or userId');
+      return res.status(400).send({ message: 'Missing name or categoryId' });
+    }
+
+    try {
+      const insertQuery = 'INSERT INTO items (name, category_id, image_url, description, user_id) VALUES (?, ?, ?, ?, ?)';
+      await db.query(insertQuery, [name, categoryId, imageUrl, description, userId]);
+      console.log(`Item added: ${name}, Category: ${categoryId}, Image: ${imageUrl}, Description: ${description}, User: ${userId}`);
+      res.status(201).send({ message: 'Item added successfully' });
+    } catch (err) {
+      console.error(`Failed to add item: ${err.message}`);
+      res.status(500).send({ message: 'Server error', error: err.message });
+    }
+  });
 
   // 회원가입 라우트
   app.post('/userregister', async (req, res) => {
@@ -300,6 +432,91 @@ async function initializeServer() {
       // email 변수 존재여부 확인
       const email = req.body.email || 'Unknown';
       logAction(email, `Server error on registering: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 카테고리 목록 조회 라우트
+  app.get('/categories', async (req, res) => {
+    try {
+      const [categories] = await db.query('SELECT * FROM categories');
+      res.send(categories);
+    } catch (err) {
+      logAction('System', `Failed to fetch categories: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 카테고리 추가 라우트
+  app.post('/categories', async (req, res) => {
+    const { name } = req.body;
+
+    if (!name) {
+      return res.status(400).send({ message: 'Category name is required' });
+    }
+
+    try {
+      const insertQuery = 'INSERT INTO categories (name) VALUES (?)';
+      await db.query(insertQuery, [name]);
+      res.status(201).send({ message: 'Category added successfully' });
+    } catch (err) {
+      console.error(`Failed to add category: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 카테고리 수정 라우트
+  app.put('/categories/:id', async (req, res) => {
+    const { id } = req.params;
+    const { name } = req.body;
+
+    if (!name) {
+      return res.status(400).send({ message: 'Category name is required' });
+    }
+
+    try {
+      const updateQuery = 'UPDATE categories SET name = ? WHERE id = ?';
+      await db.query(updateQuery, [name, id]);
+      res.status(200).send({ message: 'Category updated successfully' });
+    } catch (err) {
+      console.error(`Failed to update category: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 카테고리 삭제 라우트
+  app.delete('/categories/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+      await db.query('DELETE FROM categories WHERE id = ?', [id]);
+      res.status(200).send({ message: 'Category deleted successfully' });
+    } catch (err) {
+      console.error(`Failed to delete category: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 아이템 목록 조회 라우트
+  app.get('/items', async (req, res) => {
+    const { searchQuery, categoryId } = req.query;
+    try {
+      let query = 'SELECT * FROM items WHERE 1=1';
+      const queryParams = [];
+      
+      if (searchQuery) {
+        query += ' AND name LIKE ?';
+        queryParams.push(`%${searchQuery}%`);
+      }
+      if (categoryId) {
+        query += ' AND category_id = ?';
+        queryParams.push(categoryId);
+      }
+      
+      const [items] = await db.query(query, queryParams);
+      res.send(items);
+    } catch (err) {
+      logAction('System', `Failed to fetch items: ${err.message}`);
       res.status(500).send({ message: 'Server error' });
     }
   });
