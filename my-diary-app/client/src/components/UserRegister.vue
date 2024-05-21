@@ -10,14 +10,15 @@
       </div>
       <div>
         <label for="password">비밀번호:</label>
-        <input type="password" id="password" v-model="userData.password" @input="validatePassword" :class="{ 'is-invalid': !isPasswordEntered, 'is-valid': isPasswordEntered }" required>
-        <p v-if="!isPasswordEntered" class="warning-text">비밀번호를 입력해주세요.</p>
+        <input type="password" id="password" v-model="userData.password" @input="validatePassword" :class="{ 'is-invalid': !isPasswordValid, 'is-valid': isPasswordValid }" required>
+        <p v-if="!isPasswordValid && isPasswordEntered" class="warning-text">{{ errorMessage }}</p>
       </div>
       <div>
         <label for="confirmPassword">비밀번호 확인:</label>
-        <input type="password" id="confirmPassword" v-model="confirmPassword" @input="validatePassword" :class="{ 'is-invalid': !isPasswordValid, 'is-valid': isPasswordValid && confirmPassword }" required>
+        <input type="password" id="confirmPassword" v-model="confirmPassword" @input="validatePassword" :class="{ 'is-invalid': !isPasswordMatch, 'is-valid': isPasswordValid && confirmPassword }" required>
         <p v-if="!isPasswordMatch && confirmPassword" class="warning-text">비밀번호가 일치하지 않습니다.</p>
       </div>
+
       <div>
         <label for="name">이름:</label>
         <input type="text" id="name" v-model="userData.name" @input="validateName" :class="{ 'is-invalid': !isNameValid, 'is-valid': isNameValid }" required>
@@ -124,10 +125,17 @@ export default {
     },
     // 비밀번호 필드에 대한 유효성 검사
     validatePassword() {
+      const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
       this.isPasswordEntered = this.userData.password.length > 0;
       this.isPasswordMatch = this.userData.password === this.confirmPassword;
-      this.isPasswordValid = this.isPasswordEntered && this.isPasswordMatch;
+      this.isPasswordValid = passwordPattern.test(this.userData.password);
+      if (!this.isPasswordValid && this.isPasswordEntered) {
+        this.errorMessage = '비밀번호는 8자 이상이며, 대소문자, 숫자, 특수문자를 포함해야 합니다.';
+      } else {
+        this.errorMessage = '';
+      }
     },
+
     // 이름 필드에 대한 유효성 검사
     validateName() {
       this.isNameValid = this.userData.name.length > 0;
@@ -201,17 +209,20 @@ export default {
         })
         .catch(error => {
           // 오류 메시지 초기화
-          alert(error.response.data.message || '회원가입에 실패했습니다.')
+          let errorMessage = '회원가입에 실패했습니다.'; // 기본 오류 메시지 설정
 
           if (error.response) {
             // 서버에서 반환된 오류 메시지 처리
-            this.errorMessage = error.response.data.message;
+            errorMessage = error.response.data.message || errorMessage;
             alert(`회원가입에 실패했습니다: ${this.errorMessage}`);
           } else {
             // 서버 오류 또는 네트워크 문제로 인한 회원가입 실패
-            this.errorMessage = "서버 오류 또는 네트워크 문제로 인한 회원가입 실패";
-            alert(this.errorMessage);
+            errorMessage = "서버 오류 또는 네트워크 문제로 인한 회원가입 실패";
           }
+
+          // 오류 메시지를 표시하고 로깅
+          console.error('회원가입 실패:', errorMessage);
+          alert(errorMessage);
 
           // 폼 데이터 초기화 및 페이지 새로고침
           this.resetFormData();
