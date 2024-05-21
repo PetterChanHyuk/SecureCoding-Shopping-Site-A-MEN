@@ -1,13 +1,13 @@
 <template>
   <div class="login-container">
     <div class="login-box">
-      <h1 class="login-header">My Diary</h1>
+      <h1 class="login-header">108번가</h1>
       <div class="inputs-container">
         <div class="fields-container">
           <input type="email" placeholder="이메일" class="input-field" v-model="email" @keyup.enter="login" />
           <input type="password" placeholder="비밀번호" class="input-field" v-model="password" @keyup.enter="login" />
         </div>
-        <button class="login-btn" @click="login">로그인</button>
+        <button class="login-btn" @click="login" :disabled="loginDelay" :class="{ 'disabled': loginDelay }">로그인</button>
       </div>
       <div class="links">
         <a href="/userregister">회원가입</a> |
@@ -26,46 +26,56 @@
         return {
         email: '',
         password: '',
-        errorMessage: '' // 로그인 실패 시 에러 메시지를 저장할 변수
+        errorMessage: '', // 로그인 실패 시 에러 메시지를 저장할 변수
+        loginDelay: false //로그인 버튼 딜레이를 주기 위한 변수
         };
     },
     methods: {
       login() {
-      const userData = {
-        email: this.email,
-        password: this.password
-      };
-      
-      axios.post(`${process.env.VUE_APP_BACKEND_URL}/userlogin`, userData)
-        .then(response => {
-          // 로그인 성공
-          alert("My Diary에 오신 것을 환영합니다.");
-          console.log('로그인 성공:', response.data);
-          localStorage.setItem('userId', response.data.userId);
-          router.push('/mainpage');
-        })
-        .catch(error => {
-          // 로그인 실패
-          if (error.response) {
-            if (error.response.status === 401) {
-              if (error.response.data.message === '이메일 인증이 완료되지 않았습니다.') {
-                alert("이메일 인증이 완료되지 않았습니다.");
-              }
-              else if (error.response.data.message === '이미 다른 디바이스에서 로그인 중입니다.') {
-                alert("이미 다른 디바이스에서 로그인 중입니다.");
-              }
-              else {
-                alert("잘못된 정보입니다.\n다시 확인해주세요.");
+        if(this.loginDelay){
+          return;
+        }
+        
+        this.loginDelay = true;
+        const userData = {
+          email: this.email,
+          password: this.password
+        };
+        
+        axios.post(`${process.env.VUE_APP_BACKEND_URL}/userlogin`, userData)
+          .then(response => {
+            // 로그인 성공
+            alert("108번가에 오신 것을 환영합니다.");
+            console.log('로그인 성공:', response.data);
+            localStorage.setItem('userId', response.data.userId);
+            router.push('/mainpage');
+          })
+          .catch(error => {
+            // 로그인 실패
+            if (error.response) {
+              if (error.response.status === 401) {
+                if (error.response.data.message === '이메일 인증이 완료되지 않았습니다.') {
+                  alert("이메일 인증이 완료되지 않았습니다.");
+                }
+                else if (error.response.data.message === '이미 다른 디바이스에서 로그인 중입니다.') {
+                  alert("이미 다른 디바이스에서 로그인 중입니다.");
+                }
+                else {
+                  alert("잘못된 정보입니다.\n다시 확인해주세요.");
+                }
+              } else {
+                alert(`${process.env.VUE_APP_BACKEND_URL}`);
+                alert("알 수 없는 오류가 발생했습니다.");
               }
             } else {
-              alert(`${process.env.VUE_APP_BACKEND_URL}`);
               alert("알 수 없는 오류가 발생했습니다.");
             }
-          } else {
-            alert("알 수 없는 오류가 발생했습니다.");
-          }
-          console.error('로그인 실패:', error.response);
-          this.errorMessage = error.response ? error.response.data.message : "로그인에 실패했습니다.";
+            console.error('로그인 실패:', error.response);
+            this.errorMessage = error.response ? error.response.data.message : "로그인에 실패했습니다.";
+
+            setTimeout(() => {
+              this.loginDelay = false;
+            }, 1000);
         });
       }
     }
@@ -126,6 +136,11 @@
   cursor: pointer;
   border: none;
 }
+
+.login-btn.disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
 
 .links {
   text-align: center;

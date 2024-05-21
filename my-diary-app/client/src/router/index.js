@@ -6,6 +6,8 @@ import MyPage from '../components/MyPage.vue';
 import FindAccount from '../components/FindAccount';
 import ResetPassword from '../components/ResetPassword';
 import EmailVerification from '../components/EmailVerification.vue';
+import AddItem from '@/components/AddItem';
+import EditItem from '@/components/EditItem';
 
 // 라우터 정의
 const routes = [
@@ -48,6 +50,16 @@ const routes = [
     path: '/verify-email',
     name: 'EmailVerification',
     component: EmailVerification
+  },
+  {
+    path: '/add-item',
+    name: 'AddItem',
+    component: AddItem
+  },
+  {
+    path: '/edit-item/:id',
+    name: 'EditItem',
+    component: EditItem
   },
 ];
 

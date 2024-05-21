@@ -10,14 +10,15 @@
       </div>
       <div>
         <label for="password">비밀번호:</label>
-        <input type="password" id="password" v-model="userData.password" @input="validatePassword" :class="{ 'is-invalid': !isPasswordEntered, 'is-valid': isPasswordEntered }" required>
-        <p v-if="!isPasswordEntered" class="warning-text">비밀번호를 입력해주세요.</p>
+        <input type="password" id="password" v-model="userData.password" @input="validatePassword" :class="{ 'is-invalid': !isPasswordValid, 'is-valid': isPasswordValid }" required>
+        <p v-if="!isPasswordValid && isPasswordEntered" class="warning-text">{{ errorMessage }}</p>
       </div>
       <div>
         <label for="confirmPassword">비밀번호 확인:</label>
-        <input type="password" id="confirmPassword" v-model="confirmPassword" @input="validatePassword" :class="{ 'is-invalid': !isPasswordValid, 'is-valid': isPasswordValid && confirmPassword }" required>
+        <input type="password" id="confirmPassword" v-model="confirmPassword" @input="validatePassword" :class="{ 'is-invalid': !isPasswordMatch, 'is-valid': isPasswordValid && confirmPassword }" required>
         <p v-if="!isPasswordMatch && confirmPassword" class="warning-text">비밀번호가 일치하지 않습니다.</p>
       </div>
+
       <div>
         <label for="name">이름:</label>
         <input type="text" id="name" v-model="userData.name" @input="validateName" :class="{ 'is-invalid': !isNameValid, 'is-valid': isNameValid }" required>
@@ -28,6 +29,11 @@
         <input type="text" id="phone" v-model="userData.phone" @input="formatPhoneNumber" :class="{ 'is-invalid': !isPhoneValid || phoneExists, 'is-valid': isPhoneValid && !phoneExists }" required>
         <p v-if="!isPhoneValid" class="warning-text">01x-xxxx-xxxx 형식으로 입력해주세요.</p>
         <p v-else-if="phoneExists" class="warning-text">이미 사용 중인 전화번호입니다.</p>
+      </div>
+      <div>
+        <label for="address">주소:</label>
+        <input type="text" id="sample5_address" placeholder="주소" v-model="userData.address" readonly>
+        <input type="button" @click="sample5_execDaumPostcode()" value="주소 검색">
       </div>
       <button type="submit" :disabled="!isFormValid" :class="{ 'button-active': isFormValid, 'button-inactive': !isFormValid }">등록</button>
     </form>
@@ -44,7 +50,8 @@ export default {
         email: '',
         password: '',
         name: '',
-        phone: ''
+        phone: '',
+        address: ''
       },
       confirmPassword: '',
       isNameValid: false,
@@ -53,7 +60,11 @@ export default {
       isEmailValid: false,
       isPhoneValid: false,
       phoneExists: false,
+      emailExists: false
     };
+  },
+  mounted() {
+    this.loadDaumPostcode();
   },
   computed: {
     isFormValid() {
@@ -68,6 +79,27 @@ export default {
     }
   },
   methods: {
+    loadDaumPostcode() {
+      const script = document.createElement('script');
+      script.src = "//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
+      script.onload = () => this.initializePostcode();
+      document.head.appendChild(script);
+    },
+    initializePostcode() {
+      // 스크립트 로드가 완료된 후 필요한 초기화 코드
+    },
+    sample5_execDaumPostcode() {
+      if (typeof daum !== 'undefined') {
+        // eslint-disable-next-line no-undef
+        new daum.Postcode({
+          oncomplete: (data) => {
+            this.userData.address = data.address; // 주소 필드를 업데이트
+          }
+        }).open();
+      } else {
+        console.error("Daum 우편번호 스크립트가 로드되지 않았습니다.");
+      }
+    },
     // 이메일 필드에 대한 유효성 검사
     validateEmail() {
       const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -93,10 +125,17 @@ export default {
     },
     // 비밀번호 필드에 대한 유효성 검사
     validatePassword() {
+      const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
       this.isPasswordEntered = this.userData.password.length > 0;
       this.isPasswordMatch = this.userData.password === this.confirmPassword;
-      this.isPasswordValid = this.isPasswordEntered && this.isPasswordMatch;
+      this.isPasswordValid = passwordPattern.test(this.userData.password);
+      if (!this.isPasswordValid && this.isPasswordEntered) {
+        this.errorMessage = '비밀번호는 8자 이상이며, 대소문자, 숫자, 특수문자를 포함해야 합니다.';
+      } else {
+        this.errorMessage = '';
+      }
     },
+
     // 이름 필드에 대한 유효성 검사
     validateName() {
       this.isNameValid = this.userData.name.length > 0;
@@ -158,6 +197,7 @@ export default {
       // 전화번호 형식 검증 메소드 호출
       this.validatePhone();
     },
+    
     register() {
       axios.post(`${process.env.VUE_APP_BACKEND_URL}/userregister`, this.userData)
         .then(response => {
@@ -169,17 +209,20 @@ export default {
         })
         .catch(error => {
           // 오류 메시지 초기화
-          alert(error.response.data.message || '회원가입에 실패했습니다.')
+          let errorMessage = '회원가입에 실패했습니다.'; // 기본 오류 메시지 설정
 
           if (error.response) {
             // 서버에서 반환된 오류 메시지 처리
-            this.errorMessage = error.response.data.message;
+            errorMessage = error.response.data.message || errorMessage;
             alert(`회원가입에 실패했습니다: ${this.errorMessage}`);
           } else {
             // 서버 오류 또는 네트워크 문제로 인한 회원가입 실패
-            this.errorMessage = "서버 오류 또는 네트워크 문제로 인한 회원가입 실패";
-            alert(this.errorMessage);
+            errorMessage = "서버 오류 또는 네트워크 문제로 인한 회원가입 실패";
           }
+
+          // 오류 메시지를 표시하고 로깅
+          console.error('회원가입 실패:', errorMessage);
+          alert(errorMessage);
 
           // 폼 데이터 초기화 및 페이지 새로고침
           this.resetFormData();
@@ -192,6 +235,7 @@ export default {
       this.userData.password = '';
       this.userData.name = '';
       this.userData.phone = '';
+      this.userData.address = '';
       this.confirmPassword = '';
       this.isNameValid = false;
       this.isPasswordEntered = false;
@@ -218,6 +262,7 @@ label {
 input[type="email"],
 input[type="password"],
 input[type="text"],
+input[type="button"],
 
 button {
   width: 80%;

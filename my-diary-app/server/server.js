@@ -6,6 +6,9 @@ const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 // 타임스탬프 함수
 const moment = require('moment-timezone');
@@ -84,7 +87,7 @@ async function sendVerificationEmail(email, emailVerificationToken, tokenExpirat
   const formattedExpirationTime = tokenExpirationTime.format('YYYY-MM-DD HH:mm:ss');
   const verificationLink = `${process.env.VUE_APP_FRONTEND_URL}/verify-email?token=${emailVerificationToken}`;
   const mailOptions = {
-    from: 'ewoo2821@gmail.com',
+    from: 'chishahaboy@gmail.com',
     to: email,
     subject: '이메일 인증',
     html: `<p>이메일 인증을 위해 아래 링크를 클릭해주세요.<br>해당 링크는 <strong>${formattedExpirationTime}</strong>까지 유효합니다.<br><br><span style="font-size:'30px'"><a href="${verificationLink}"  style="font-size:200%; text-decoration:none;"">인증하기</a></span></p>`
@@ -103,7 +106,7 @@ async function sendVerificationEmail(email, emailVerificationToken, tokenExpirat
 async function sendPasswordResetEmail(email, resetLink, expirationTime) {
   const formattedExpirationTime = moment(expirationTime).format('YYYY-MM-DD HH:mm:ss');
   const mailOptions = {
-    from: 'ewoo2821@gmail.com', // 발신자 이메일 주소
+    from: 'chishahaboy@gmail.com', // 발신자 이메일 주소
     to: email, // 수신자 이메일 주소
     subject: '비밀번호 재설정 요청', // 이메일 제목
     html: `
@@ -141,6 +144,8 @@ async function deleteExpiredAccounts(db) {
 
 // 서버 초기화 및 데이터베이스 설정
 async function initializeServer() {
+  const uploadDir = path.join(__dirname, 'uploads');  // 이미지 업로드 경로 설정
+
   try {
     // 데이터베이스 연결 설정
     const dbConfig = {
@@ -153,20 +158,20 @@ async function initializeServer() {
     db = await mysql.createConnection(dbConfig);
     logAction('System', 'MySQL successfully connected!');
 
-    // diaryDB 데이터베이스 생성
-    const [dbCreateResult] = await db.query("CREATE DATABASE IF NOT EXISTS diaryDB");
-    // diaryDB 데이터베이스 존재 여부 확인
-    const [dbs] = await db.query("SHOW DATABASES LIKE 'diaryDB'");
+    // mallDB 데이터베이스 생성
+    const [dbCreateResult] = await db.query("CREATE DATABASE IF NOT EXISTS mallDB");
+    // mallDB 데이터베이스 존재 여부 확인
+    const [dbs] = await db.query("SHOW DATABASES LIKE 'mallDB'");
     if (dbs.length === 0) {
-      // diaryDB 데이터베이스 생성
-      await db.query("CREATE DATABASE diaryDB");
-      logAction('System', "DiaryDB created!");
+      // mallDB 데이터베이스 생성
+      await db.query("CREATE DATABASE mallDB");
+      logAction('System', "mallDB created!");
     } else {
-      logAction('System', "DiaryDB already exists!");
+      logAction('System', "mallDB already exists!");
     }
 
-    // diaryDB 데이터베이스 연결
-    await db.changeUser({ database: 'diaryDB' });
+    // mallDB 데이터베이스 연결
+    await db.changeUser({ database: 'mallDB' });
 
     // users 테이블 존재 여부 확인 및 생성
     const [usersTables] = await db.query("SHOW TABLES LIKE 'users'");
@@ -178,6 +183,7 @@ async function initializeServer() {
             password VARCHAR(255) NOT NULL,
             name VARCHAR(100) NOT NULL,
             phone VARCHAR(20) NOT NULL,
+            address VARCHAR(255) NOT NULL,
             email_verified BOOLEAN NOT NULL DEFAULT FALSE,
             email_verification_token VARCHAR(255),
             token_expiration DATETIME,
@@ -190,21 +196,37 @@ async function initializeServer() {
       logAction('System', "Table 'users' already exists!");
     }
 
-    // diaries 테이블 존재 여부 확인 및 생성
-    const [diariesTables] = await db.query("SHOW TABLES LIKE 'diaries'");
-    if (diariesTables.length === 0) {
-      const createDiariesTable = `
-        CREATE TABLE diaries (
-            diary_id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT,
-            date DATE,
-            content TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id)
+    // categories 테이블 존재 여부 확인 및 생성
+    const [categoriesTables] = await db.query("SHOW TABLES LIKE 'categories'");
+    if (categoriesTables.length === 0) {
+      const createCategoriesTable = `
+        CREATE TABLE categories (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL
         )`;
-      await db.query(createDiariesTable);
-      logAction('System', "Table 'diaries' created!");
+      await db.query(createCategoriesTable);
+      logAction('System', "Table 'categories' created!");
     } else {
-      logAction('System', "Table 'diaries' already exists!");
+      logAction('System', "Table 'categories' already exists!");
+    }
+
+    // items 테이블 존재 여부 확인 및 생성
+    const [itemsTables] = await db.query("SHOW TABLES LIKE 'items'");
+    if (itemsTables.length === 0) {
+      const createItemsTable = `
+        CREATE TABLE items (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          category_id INT,
+          description TEXT,
+          user_id INT,
+          image_url VARCHAR(255), -- 이미지 URL 필드 추가
+          FOREIGN KEY (category_id) REFERENCES categories(id)
+        )`;
+      await db.query(createItemsTable);
+      logAction('System', "Table 'items' created!");
+    } else {
+      logAction('System', "Table 'items' already exists!");
     }
 
     // password_reset_tokens 테이블 생성
@@ -231,6 +253,19 @@ async function initializeServer() {
     logAction('System', `Failed to initialize server: ${err.message}`);
   }
 
+  // Multer 설정
+  const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir);
+      }
+      cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+      cb(null, Date.now() + path.extname(file.originalname)); // 파일 이름 설정
+    }
+  });
+  const upload = multer({ storage: storage });
 
   // Express 앱 설정
   const app = express();
@@ -239,13 +274,119 @@ async function initializeServer() {
     credentials: true
   }));
   app.use(bodyParser.json());
+  app.use('/uploads', express.static(uploadDir));
+
+  // 파일 업로드 라우트
+  app.post('/upload', upload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).send({ message: 'No file uploaded' });
+      }
+      const filePath = path.join('uploads', req.file.filename);
+      res.status(200).send({ filePath });
+    } catch (err) {
+      console.error(`File upload error: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 아이템 조회 라우트
+  app.get('/items/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+      const [items] = await db.query('SELECT * FROM items WHERE id = ?', [id]);
+      if (items.length === 0) {
+        return res.status(404).send({ message: 'Item not found' });
+      }
+      res.send(items[0]);
+    } catch (err) {
+      logAction('System', `Failed to fetch item: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  app.put('/items/:id', async (req, res) => {
+    const { id } = req.params;
+    const { name, categoryId, imageUrl, description, userId } = req.body;
+  
+    if (!name || !categoryId || !userId) {
+      return res.status(400).send({ message: 'Missing name, categoryId, or userId' });
+    }
+  
+    try {
+      const [result] = await db.query('SELECT * FROM items WHERE id = ?', [id]);
+      if (result.length === 0) {
+        return res.status(404).send({ message: 'Item not found' });
+      }
+      if (result[0].user_id !== parseInt(userId, 10)) {
+        return res.status(403).send({ message: 'Unauthorized' });
+      }
+  
+      const updateQuery = 'UPDATE items SET name = ?, category_id = ?, image_url = ?, description = ? WHERE id = ?';
+      await db.query(updateQuery, [name, categoryId, imageUrl, description, id]);
+      res.status(200).send({ message: 'Item updated successfully' });
+    } catch (err) {
+      console.error(`Failed to update item: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 아이템 삭제 라우트
+  app.delete('/items/:id', async (req, res) => {
+    const { id } = req.params;
+    const { userId } = req.body;
+
+    try {
+      const [result] = await db.query('SELECT * FROM items WHERE id = ?', [id]);
+      if (result.length === 0) {
+        return res.status(404).send({ message: 'Item not found' });
+      }
+      if (result[0].user_id !== parseInt(userId, 10)) {
+        return res.status(403).send({ message: 'Unauthorized' });
+      }
+
+      await db.query('DELETE FROM items WHERE id = ?', [id]);
+      res.status(200).send({ message: 'Item deleted successfully' });
+    } catch (err) {
+      console.error(`Failed to delete item: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 아이템 추가 라우트에 설명 필드 추가
+  app.post('/items', async (req, res) => {
+    const { name, categoryId, imageUrl, description, userId } = req.body;
+
+    if (!name || !categoryId || !userId) {
+      console.error('Missing name, categoryId, or userId');
+      return res.status(400).send({ message: 'Missing name or categoryId' });
+    }
+
+    try {
+      const insertQuery = 'INSERT INTO items (name, category_id, image_url, description, user_id) VALUES (?, ?, ?, ?, ?)';
+      await db.query(insertQuery, [name, categoryId, imageUrl, description, userId]);
+      console.log(`Item added: ${name}, Category: ${categoryId}, Image: ${imageUrl}, Description: ${description}, User: ${userId}`);
+      res.status(201).send({ message: 'Item added successfully' });
+    } catch (err) {
+      console.error(`Failed to add item: ${err.message}`);
+      res.status(500).send({ message: 'Server error', error: err.message });
+    }
+  });
 
   // 회원가입 라우트
   app.post('/userregister', async (req, res) => {
-    const { email, password, name, phone } = req.body;
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const { email, password, name, phone, address } = req.body;
+
+    // 필수 필드 유효성 검사
+    if (!email || !password || !name || !phone || !address) {
+      // 클라이언트에서 메시지를 처리하도록 오류 코드만 전송
+      return res.status(400).send({ error: 'missing_fields' });
+    }
 
     try {
+      // 비밀번호 해싱
+      const hashedPassword = await bcrypt.hash(password, 10);
+
       // 고유 사용자 ID 생성
       let userId;
       let isUnique = false;
@@ -263,14 +404,14 @@ async function initializeServer() {
         return res.status(409).send({ message: '이미 사용 중인 이메일 주소입니다.' });
       }
 
-      // 이메일 인증 토큰 생성
+      // 이메일 인증 토큰 생성 및 만료 시간 설정
       const emailVerificationToken = generateEmailVerificationToken();
       const currentTimestamp = getCurrentTimestamp();
       const tokenExpirationTime = moment(currentTimestamp).add(3, 'hours');
 
       // 사용자 정보 저장
-      const insertQuery = 'INSERT INTO users (id, email, password, name, phone, email_verification_token, token_expiration) VALUES (?, ?, ?, ?, ?, ?, ?)';
-      await db.query(insertQuery, [userId, email, hashedPassword, name, phone, emailVerificationToken, tokenExpirationTime.format('YYYY-MM-DD HH:mm:ss')]);
+      const insertQuery = 'INSERT INTO users (id, email, password, name, phone, address, email_verification_token, token_expiration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+      await db.query(insertQuery, [userId, email, hashedPassword, name, phone, address, emailVerificationToken, tokenExpirationTime.format('YYYY-MM-DD HH:mm:ss')]);
 
       logAction(email, `Account registered with ID ${userId}`);
 
@@ -291,6 +432,91 @@ async function initializeServer() {
       // email 변수 존재여부 확인
       const email = req.body.email || 'Unknown';
       logAction(email, `Server error on registering: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 카테고리 목록 조회 라우트
+  app.get('/categories', async (req, res) => {
+    try {
+      const [categories] = await db.query('SELECT * FROM categories');
+      res.send(categories);
+    } catch (err) {
+      logAction('System', `Failed to fetch categories: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 카테고리 추가 라우트
+  app.post('/categories', async (req, res) => {
+    const { name } = req.body;
+
+    if (!name) {
+      return res.status(400).send({ message: 'Category name is required' });
+    }
+
+    try {
+      const insertQuery = 'INSERT INTO categories (name) VALUES (?)';
+      await db.query(insertQuery, [name]);
+      res.status(201).send({ message: 'Category added successfully' });
+    } catch (err) {
+      console.error(`Failed to add category: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 카테고리 수정 라우트
+  app.put('/categories/:id', async (req, res) => {
+    const { id } = req.params;
+    const { name } = req.body;
+
+    if (!name) {
+      return res.status(400).send({ message: 'Category name is required' });
+    }
+
+    try {
+      const updateQuery = 'UPDATE categories SET name = ? WHERE id = ?';
+      await db.query(updateQuery, [name, id]);
+      res.status(200).send({ message: 'Category updated successfully' });
+    } catch (err) {
+      console.error(`Failed to update category: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 카테고리 삭제 라우트
+  app.delete('/categories/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+      await db.query('DELETE FROM categories WHERE id = ?', [id]);
+      res.status(200).send({ message: 'Category deleted successfully' });
+    } catch (err) {
+      console.error(`Failed to delete category: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 아이템 목록 조회 라우트
+  app.get('/items', async (req, res) => {
+    const { searchQuery, categoryId } = req.query;
+    try {
+      let query = 'SELECT * FROM items WHERE 1=1';
+      const queryParams = [];
+      
+      if (searchQuery) {
+        query += ' AND name LIKE ?';
+        queryParams.push(`%${searchQuery}%`);
+      }
+      if (categoryId) {
+        query += ' AND category_id = ?';
+        queryParams.push(categoryId);
+      }
+      
+      const [items] = await db.query(query, queryParams);
+      res.send(items);
+    } catch (err) {
+      logAction('System', `Failed to fetch items: ${err.message}`);
       res.status(500).send({ message: 'Server error' });
     }
   });
@@ -451,52 +677,6 @@ async function initializeServer() {
     }
   });
 
-  // 일기저장 라우트
-  app.post('/savediary', async (req, res) => {
-    const { user_id, date, content } = req.body;
-    const encryptedContent = encrypt(content);
-
-    try {
-      const [selectResults] = await db.query('SELECT * FROM diaries WHERE user_id = ? AND date = ?', [user_id, date]);
-
-      if (selectResults.length > 0) {
-        // 일기가 이미 존재하면 업데이트
-        await db.query('UPDATE diaries SET content = ? WHERE user_id = ? AND date = ?', [encryptedContent, user_id, date]);
-        logAction(user_id, `SaveDiary request: Diary updated successfully`);
-        res.status(200).send({ message: 'Diary updated successfully' });
-      } else {
-        // 새 일기 삽입
-        await db.query('INSERT INTO diaries (user_id, date, content) VALUES (?, ?, ?)', [user_id, date, encryptedContent]);
-        logAction(user_id, `SaveDiary request: Diary saved successfully`);
-        res.status(200).send({ message: 'Diary saved successfully' });
-      }
-    } catch (err) {
-      logAction(user_id, `SaveDiary request error: ${err.message}`);
-      return res.status(500).send({ message: 'Error saving diary' });
-    }
-  });
-
-  // 특정 날짜의 일기 조회 라우트
-  app.get('/diary/:date', async (req, res) => {
-    const userId = req.query.userId;
-    const date = req.params.date;
-
-    try {
-      const [results] = await db.query('SELECT * FROM diaries WHERE user_id = ? AND date = ?', [userId, date]);
-
-      if (results.length === 0) {
-        logAction(userId, `SearchDiary request: no contents on this date`);
-        return res.status(404).send({ message: 'Diary not found for this date' });
-      }
-
-      const decryptedContent = decrypt(results[0].content);
-      res.send({ content: decryptedContent });
-    } catch (err) {
-      logAction(userId, `SearchDiary request error: ${err.message}`);
-      return res.status(500).send({ message: 'Server error' });
-    }
-  });
-
   // 계정 찾기 라우트
   app.post('/findAccount', async (req, res) => {
     const { name, phone } = req.body;
@@ -647,55 +827,6 @@ async function initializeServer() {
     } catch (err) {
       logAction(userId, `Userinfo request error: ${err.message}`);
       return res.status(500).send({ message: 'Server error' });
-    }
-  });
-
-  // 현재 시간을 클라이언트로 전송 라우트
-  app.get('/current-kst-date', (req, res) => {
-    const kstDate = moment().tz('Asia/Seoul').format('YYYY-MM-DD');
-    res.send({ date: kstDate });
-  });
-
-  // 최근 작성한 일기 날짜 조회 라우트
-  app.get('/recent-diaries', async (req, res) => {
-    const userId = req.query.userId;
-
-    try {
-      // 사용자의 최근 일기 날짜를 diary_id 기준 내림차순으로 조회
-      const [diaries] = await db.query(`
-        SELECT date FROM diaries 
-        WHERE user_id = ? 
-        ORDER BY diary_id DESC 
-        LIMIT 30
-      `, [userId]);
-
-      // 날짜만 추출하여 배열로 반환
-      const dates = diaries.map(diary => diary.date);
-      res.send({ dates });
-    } catch (err) {
-      console.error(`Error fetching recent diaries for user ${userId}: ${err.message}`);
-      res.status(500).send({ message: 'Server error' });
-    }
-  });
-
-  // 일기 삭제 라우트
-  app.delete('/diary/:date', async (req, res) => {
-    const userId = req.query.userId;
-    const date = req.params.date;
-
-    try {
-      const [result] = await db.query('DELETE FROM diaries WHERE user_id = ? AND date = ?', [userId, date]);
-
-      if (result.affectedRows > 0) {
-        logAction(userId, `Diary deleted for date: ${date}`);
-        res.status(200).send({ message: 'Diary successfully deleted' });
-      } else {
-        logAction(userId, `No diary found to delete for date: ${date}`);
-        res.status(404).send({ message: 'No diary found for this date' });
-      }
-    } catch (err) {
-      logAction(userId, `Error deleting diary: ${err.message}`);
-      res.status(500).send({ message: 'Server error' });
     }
   });
 
