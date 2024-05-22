@@ -72,8 +72,25 @@ export default {
       return `${process.env.VUE_APP_BACKEND_URL}/${imageUrl}`;
     },
     search() {
-      this.filteredQuery = this.searchQuery;
+      const validatedQuery = this.validateSearchQuery(this.searchQuery);
+      if (!validatedQuery) {
+        alert('Invalid search query. Please enter alphanumeric characters only.');
+        return;
+      }
+
+      this.filteredQuery = validatedQuery;
       this.fetchItems();
+    },
+    validateSearchQuery(query) {
+      const regex = /^[a-zA-Z0-9 ]*$/;
+      if (!regex.test(query)) {
+        return false;
+      }
+      // SQL 인젝션을 방지하기 위해 입력 값에 대해 이스케이핑 수행
+      const escapedQuery = query.replace(/'/g, "''");
+
+      // 이스케이핑된 검색어 반환
+      return escapedQuery;
     },
     refreshPage() {
       window.location.reload();

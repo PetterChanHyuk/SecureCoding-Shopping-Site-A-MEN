@@ -4,35 +4,35 @@
     <form @submit.prevent="register">
       <div>
         <label for="email">이메일:</label>
-        <input type="email" id="email" v-model="userData.email" @input="validateEmail" :class="{ 'is-invalid': !isEmailValid || emailExists, 'is-valid': isEmailValid && !emailExists }" required>
+        <input type="email" id="email" v-model="userData.email" @input="validateEmail" :class="{ 'is-invalid': !isEmailValid || emailExists, 'is-valid': isEmailValid && !emailExists }" maxlength="100" required>
         <p v-if="!isEmailValid" class="warning-text">유효한 이메일 주소를 입력해주세요.</p>
         <p v-else-if="emailExists" class="warning-text">이미 존재하는 메일입니다.</p>
       </div>
       <div>
         <label for="password">비밀번호:</label>
-        <input type="password" id="password" v-model="userData.password" @input="validatePassword" :class="{ 'is-invalid': !isPasswordValid, 'is-valid': isPasswordValid }" required>
+        <input type="password" id="password" v-model="userData.password" @input="validatePassword" :class="{ 'is-invalid': !isPasswordValid, 'is-valid': isPasswordValid }" maxlength="20" required>
         <p v-if="!isPasswordValid && isPasswordEntered" class="warning-text">{{ errorMessage }}</p>
       </div>
       <div>
         <label for="confirmPassword">비밀번호 확인:</label>
-        <input type="password" id="confirmPassword" v-model="confirmPassword" @input="validatePassword" :class="{ 'is-invalid': !isPasswordMatch, 'is-valid': isPasswordValid && confirmPassword }" required>
+        <input type="password" id="confirmPassword" v-model="confirmPassword" @input="validatePassword" :class="{ 'is-invalid': !isPasswordMatch, 'is-valid': isPasswordValid && confirmPassword }" maxlength="20" required>
         <p v-if="!isPasswordMatch && confirmPassword" class="warning-text">비밀번호가 일치하지 않습니다.</p>
       </div>
 
       <div>
         <label for="name">이름:</label>
-        <input type="text" id="name" v-model="userData.name" @input="validateName" :class="{ 'is-invalid': !isNameValid, 'is-valid': isNameValid }" required>
+        <input type="text" id="name" v-model="userData.name" @input="validateName" :class="{ 'is-invalid': !isNameValid, 'is-valid': isNameValid }" maxlength="50" required>
         <p v-if="!userData.name" class="warning-text">이름을 입력해주세요.</p>
       </div>
       <div>
         <label for="phone">전화번호:</label>
-        <input type="text" id="phone" v-model="userData.phone" @input="formatPhoneNumber" :class="{ 'is-invalid': !isPhoneValid || phoneExists, 'is-valid': isPhoneValid && !phoneExists }" required>
+        <input type="text" id="phone" v-model="userData.phone" @input="formatPhoneNumber" :class="{ 'is-invalid': !isPhoneValid || phoneExists, 'is-valid': isPhoneValid && !phoneExists }" maxlength="13" required>
         <p v-if="!isPhoneValid" class="warning-text">01x-xxxx-xxxx 형식으로 입력해주세요.</p>
         <p v-else-if="phoneExists" class="warning-text">이미 사용 중인 전화번호입니다.</p>
       </div>
       <div>
         <label for="address">주소:</label>
-        <input type="text" id="sample5_address" placeholder="주소" v-model="userData.address" readonly>
+        <input type="text" id="sample5_address" placeholder="주소" v-model="userData.address" readonly maxlength="200">
         <input type="button" @click="sample5_execDaumPostcode()" value="주소 검색">
       </div>
       <button type="submit" :disabled="!isFormValid" :class="{ 'button-active': isFormValid, 'button-inactive': !isFormValid }">등록</button>
@@ -125,12 +125,12 @@ export default {
     },
     // 비밀번호 필드에 대한 유효성 검사
     validatePassword() {
-      const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+      const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,20}$/;
       this.isPasswordEntered = this.userData.password.length > 0;
       this.isPasswordMatch = this.userData.password === this.confirmPassword;
       this.isPasswordValid = passwordPattern.test(this.userData.password);
       if (!this.isPasswordValid && this.isPasswordEntered) {
-        this.errorMessage = '비밀번호는 8자 이상이며, 대소문자, 숫자, 특수문자를 포함해야 합니다.';
+        this.errorMessage = '비밀번호는 8자 이상 20자 이하이며, 대소문자, 숫자, 특수문자를 포함해야 합니다.';
       } else {
         this.errorMessage = '';
       }
@@ -138,7 +138,7 @@ export default {
 
     // 이름 필드에 대한 유효성 검사
     validateName() {
-      this.isNameValid = this.userData.name.length > 0;
+      this.isNameValid = this.userData.name.length > 0 && this.userData.name.length <= 50;
     },
     // 전화번호 필드에 대한 유효성 검사
     validatePhone() {
@@ -263,7 +263,6 @@ input[type="email"],
 input[type="password"],
 input[type="text"],
 input[type="button"],
-
 button {
   width: 80%;
   padding: 10px;
@@ -307,4 +306,3 @@ input.is-invalid {
   margin-bottom: 10px;
 }
 </style>
-  
