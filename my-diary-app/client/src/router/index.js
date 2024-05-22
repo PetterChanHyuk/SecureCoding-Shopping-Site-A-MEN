@@ -69,4 +69,13 @@ const router = createRouter({
   routes
 });
 
+// HTTPS 강제를 위한 글로벌 가드 추가
+router.beforeEach((to, from, next) => {
+  if (window.location.protocol !== 'https:' && process.env.NODE_ENV === 'production') {
+    window.location.href = 'https://' + window.location.hostname + window.location.pathname + window.location.hash;
+  } else {
+    next();
+  }
+});
+
 export default router;

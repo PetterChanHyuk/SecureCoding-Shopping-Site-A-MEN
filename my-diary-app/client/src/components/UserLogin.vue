@@ -4,8 +4,8 @@
       <h1 class="login-header">108번가</h1>
       <div class="inputs-container">
         <div class="fields-container">
-          <input type="email" placeholder="이메일" class="input-field" v-model="email" @keyup.enter="login" />
-          <input type="password" placeholder="비밀번호" class="input-field" v-model="password" @keyup.enter="login" />
+          <input type="email" placeholder="이메일" class="input-field" v-model="email" @keyup.enter="login" maxlength="100"/>
+          <input type="password" placeholder="비밀번호" class="input-field" v-model="password" @keyup.enter="login" maxlength="20"/>
         </div>
         <button class="login-btn" @click="login" :disabled="loginDelay" :class="{ 'disabled': loginDelay }">로그인</button>
       </div>
@@ -32,10 +32,20 @@
     },
     methods: {
       login() {
-        if(this.loginDelay){
+        if (this.loginDelay) {
           return;
         }
-        
+
+        // 이메일과 비밀번호의 길이 제한을 검사합니다.
+        if (this.email.length > 100) {
+          alert("이메일은 최대 100자까지 입력할 수 있습니다.");
+          return;
+        }
+        if (this.password.length > 20) {
+          alert("비밀번호는 최대 20자까지 입력할 수 있습니다.");
+          return;
+        }
+
         this.loginDelay = true;
         const userData = {
           email: this.email,

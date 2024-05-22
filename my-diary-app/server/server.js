@@ -37,7 +37,7 @@ function generateRandomUserId() {
 }
 
 // 암호화 키
-const ENCRYPTION_KEY = 'your-32-byte-long-encryption-key'; // 32바이트의 키
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY; // 환경 변수에서 암호화 키 가져오기
 const IV_LENGTH = 16; // 초기화 벡터 길이
 
 // 텍스트 암호화 함수
@@ -56,7 +56,7 @@ function decrypt(text) {
     let encryptedText = Buffer.from(textParts.join(':'), 'hex');
     let decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
     let decrypted = decipher.update(encryptedText);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    decrypted = Buffer.concat([decrypted, cipher.final()]);
     return decrypted.toString();
 }
 
@@ -385,7 +385,8 @@ async function initializeServer() {
 
     try {
       // 비밀번호 해싱
-      const hashedPassword = await bcrypt.hash(password, 10);
+      const saltRounds = parseInt(process.env.SALT_ROUNDS); // 환경 변수에서 솔트 라운드 가져오기
+      const hashedPassword = await bcrypt.hash(password, saltRounds);
 
       // 고유 사용자 ID 생성
       let userId;
