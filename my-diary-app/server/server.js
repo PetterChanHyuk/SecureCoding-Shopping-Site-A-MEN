@@ -42,11 +42,15 @@ const IV_LENGTH = 16; // 초기화 벡터 길이
 
 // 텍스트 암호화 함수
 function encrypt(text) {
-    let iv = crypto.randomBytes(IV_LENGTH);
-    let cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
-    let encrypted = cipher.update(text);
-    encrypted = Buffer.concat([encrypted, cipher.final()]);
-    return iv.toString('hex') + ':' + encrypted.toString('hex');
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const result = iv.toString('hex') + ':' + encrypted;
+  if (result.length > 255) {
+      throw new Error('Encrypted text length exceeds maximum allowed length.');
+  }
+  return result;
 }
 
 // 텍스트 복호화 함수
@@ -178,17 +182,17 @@ async function initializeServer() {
     if (usersTables.length === 0) {
       const createUsersTable = `
         CREATE TABLE users (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            email VARCHAR(255) NOT NULL UNIQUE,
-            password VARCHAR(255) NOT NULL,
-            name VARCHAR(100) NOT NULL,
-            phone VARCHAR(20) NOT NULL,
-            address VARCHAR(255) NOT NULL,
-            email_verified BOOLEAN NOT NULL DEFAULT FALSE,
-            email_verification_token VARCHAR(255),
-            token_expiration DATETIME,
-            is_LogIn BOOLEAN NOT NULL DEFAULT FALSE,
-            last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          email VARCHAR(255) NOT NULL UNIQUE,
+          password VARCHAR(255) NOT NULL,
+          name VARCHAR(100) NOT NULL,
+          phone VARCHAR(255) NOT NULL,
+          address VARCHAR(255) NOT NULL,
+          email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+          email_verification_token VARCHAR(255),
+          token_expiration DATETIME,
+          is_LogIn BOOLEAN NOT NULL DEFAULT FALSE,
+          last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`;
       await db.query(createUsersTable);
       logAction('System', "Table 'users' created!");
@@ -374,35 +378,39 @@ async function initializeServer() {
   });
 
   // 회원가입 라우트
-  app.post('/userregister', async (req, res) => {
-    const { email, password, name, phone, address } = req.body;
+app.post('/userregister', async (req, res) => {
+  const { email, password, name, phone, address } = req.body;
 
-    // 필수 필드 유효성 검사
-    if (!email || !password || !name || !phone || !address) {
+  // 필수 필드 유효성 검사
+  if (!email || !password || !name || !phone || !address) {
       // 클라이언트에서 메시지를 처리하도록 오류 코드만 전송
       return res.status(400).send({ error: 'missing_fields' });
-    }
+  }
 
-    try {
+  try {
       // 비밀번호 해싱
       const saltRounds = parseInt(process.env.SALT_ROUNDS); // 환경 변수에서 솔트 라운드 가져오기
       const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+      // 이메일과 전화번호 암호화
+      const encryptedEmail = encrypt(email);
+      const encryptedPhone = encrypt(phone);
 
       // 고유 사용자 ID 생성
       let userId;
       let isUnique = false;
       while (!isUnique) {
-        userId = generateRandomUserId();
-        const [checkUserId] = await db.query('SELECT id FROM users WHERE id = ?', [userId]);
-        if (checkUserId.length === 0) {
-          isUnique = true;
-        }
+          userId = generateRandomUserId();
+          const [checkUserId] = await db.query('SELECT id FROM users WHERE id = ?', [userId]);
+          if (checkUserId.length === 0) {
+              isUnique = true;
+          }
       }
 
       // 중복 이메일 검사
-      const [existingUser] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+      const [existingUser] = await db.query('SELECT * FROM users WHERE email = ?', [encryptedEmail]);
       if (existingUser.length > 0) {
-        return res.status(409).send({ message: '이미 사용 중인 이메일 주소입니다.' });
+          return res.status(409).send({ message: '이미 사용 중인 이메일 주소입니다.' });
       }
 
       // 이메일 인증 토큰 생성 및 만료 시간 설정
@@ -412,30 +420,30 @@ async function initializeServer() {
 
       // 사용자 정보 저장
       const insertQuery = 'INSERT INTO users (id, email, password, name, phone, address, email_verification_token, token_expiration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
-      await db.query(insertQuery, [userId, email, hashedPassword, name, phone, address, emailVerificationToken, tokenExpirationTime.format('YYYY-MM-DD HH:mm:ss')]);
+      await db.query(insertQuery, [userId, encryptedEmail, hashedPassword, name, encryptedPhone, address, emailVerificationToken, tokenExpirationTime.format('YYYY-MM-DD HH:mm:ss')]);
 
       logAction(email, `Account registered with ID ${userId}`);
 
       // 이메일 발송 로직 호출
       try {
-        await sendVerificationEmail(email, emailVerificationToken, tokenExpirationTime);
-        res.status(200).send({ message: 'Verification email sent successfully' });
+          await sendVerificationEmail(email, emailVerificationToken, tokenExpirationTime);
+          res.status(200).send({ message: 'Verification email sent successfully' });
       } catch (error) {
-        res.status(500).send({ message: 'Error sending verification email' });
-        logAction(email, `Error sending verification email: ${error.message}`);
+          res.status(500).send({ message: 'Error sending verification email' });
+          logAction(email, `Error sending verification email: ${error.message}`);
       }
-    } catch (err) {
+  } catch (err) {
       if (err.code === 'ER_DUP_ENTRY') {
-        // 중복 이메일 오류 처리
-        return res.status(409).send({ message: '이미 사용 중인 이메일 주소입니다.' });
+          // 중복 이메일 오류 처리
+          return res.status(409).send({ message: '이미 사용 중인 이메일 주소입니다.' });
       }
 
       // email 변수 존재여부 확인
       const email = req.body.email || 'Unknown';
       logAction(email, `Server error on registering: ${err.message}`);
       res.status(500).send({ message: 'Server error' });
-    }
-  });
+  }
+});
 
   // 카테고리 목록 조회 라우트
   app.get('/categories', async (req, res) => {
@@ -560,21 +568,24 @@ async function initializeServer() {
   app.get('/check-email/:email', async (req, res) => {
     const emailToCheck = req.params.email;
 
+    // 이메일 암호화
+    const encryptedEmail = encrypt(emailToCheck);
+
     try {
-      const [results] = await db.query('SELECT * FROM users WHERE email = ?', [emailToCheck]);
+        const [results] = await db.query('SELECT * FROM users WHERE email = ?', [encryptedEmail]);
 
-      if (results.length > 0) {
-        // 중복 이메일이 이미 존재하는 경우
-        logAction(emailToCheck, 'Email already exists');
-        return res.status(409).send({ message: '이미 존재하는 메일입니다.' });
-      }
+        if (results.length > 0) {
+            // 중복 이메일이 이미 존재하는 경우
+            logAction(emailToCheck, 'Email already exists');
+            return res.status(409).send({ message: '이미 존재하는 메일입니다.' });
+        }
 
-      // 중복 이메일이 존재하지 않는 경우
-      logAction(emailToCheck, 'Email available');
-      res.status(200).send({ message: '사용 가능한 이메일입니다.' });
+        // 중복 이메일이 존재하지 않는 경우
+        logAction(emailToCheck, 'Email available');
+        res.status(200).send({ message: '사용 가능한 이메일입니다.' });
     } catch (err) {
-      logAction(emailToCheck, `Server error on searching email in database: ${err.message}`);
-      return res.status(500).send({ message: 'Server error' });
+        logAction(emailToCheck, `Server error on searching email in database: ${err.message}`);
+        return res.status(500).send({ message: 'Server error' });
     }
   });
 
@@ -582,51 +593,58 @@ async function initializeServer() {
   app.get('/check-phone/:phone', async (req, res) => {
     const phoneToCheck = req.params.phone;
 
+    // 전화번호 암호화
+    const encryptedPhone = encrypt(phoneToCheck);
+
     try {
-      const [results] = await db.query('SELECT * FROM users WHERE phone = ?', [phoneToCheck]);
+        const [results] = await db.query('SELECT * FROM users WHERE phone = ?', [encryptedPhone]);
 
-      if (results.length > 0) {
-        // 중복 전화번호가 이미 존재하는 경우
-        logAction(phoneToCheck, 'Phone number already exists');
-        return res.status(409).send({ message: '이미 사용 중인 전화번호입니다.' });
-      }
+        if (results.length > 0) {
+            // 중복 전화번호가 이미 존재하는 경우
+            logAction(phoneToCheck, 'Phone number already exists');
+            return res.status(409).send({ message: '이미 사용 중인 전화번호입니다.' });
+        }
 
-      // 중복 전화번호가 존재하지 않는 경우
-      logAction(phoneToCheck, 'Phone number available');
-      res.status(200).send({ message: '사용 가능한 전화번호입니다.' });
+        // 중복 전화번호가 존재하지 않는 경우
+        logAction(phoneToCheck, 'Phone number available');
+        res.status(200).send({ message: '사용 가능한 전화번호입니다.' });
     } catch (err) {
-      logAction(phoneToCheck, `Server error on searching phone in database: ${err.message}`);
-      return res.status(500).send({ message: 'Server error' });
+        logAction(phoneToCheck, `Server error on searching phone in database: ${err.message}`);
+        return res.status(500).send({ message: 'Server error' });
     }
   });
+
 
   // 로그인 라우트
   app.post('/userlogin', async (req, res) => {
     const { email, password } = req.body;
 
     try {
+      // 이메일 암호화
+      const encryptedEmail = encrypt(email);
+
       // 사용자 정보 조회
-      const [user] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
-  
+      const [user] = await db.query('SELECT * FROM users WHERE email = ?', [encryptedEmail]);
+
       if (user.length === 0) {
-        return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
+          return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
       }
-  
+
       const currentUser = user[0];
-  
+
       // 이미 로그인 중인지 확인
       if (currentUser.is_LogIn) {
-        return res.status(401).send({ message: '이미 다른 디바이스에서 로그인 중입니다.' });
+          return res.status(401).send({ message: '이미 다른 디바이스에서 로그인 중입니다.' });
       }
-  
+
       // 비밀번호 확인
       if (!await bcrypt.compare(password, currentUser.password)) {
-        return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
+          return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
       }
-  
+
       // 이메일 인증 확인
       if (!currentUser.email_verified) {
-        return res.status(401).send({ message: '이메일 인증이 완료되지 않았습니다.' });
+          return res.status(401).send({ message: '이메일 인증이 완료되지 않았습니다.' });
       }
 
       // 로그인 성공
@@ -635,8 +653,8 @@ async function initializeServer() {
       await db.query('UPDATE users SET last_activity = NOW() WHERE id = ?', [currentUser.id]);
       res.status(200).send({ message: 'Login successful', userId: currentUser.id });
     } catch (err) {
-      console.error(err);
-      res.status(500).send({ message: 'Server error' });
+        console.error(err);
+        res.status(500).send({ message: 'Server error' });
     }
   });
 
