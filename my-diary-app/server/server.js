@@ -53,15 +53,15 @@ function encrypt(text) {
   return result;
 }
 
-// 텍스트 복호화 함수
+// 복호화 함수
 function decrypt(text) {
-    let textParts = text.split(':');
-    let iv = Buffer.from(textParts.shift(), 'hex');
-    let encryptedText = Buffer.from(textParts.join(':'), 'hex');
-    let decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
-    let decrypted = decipher.update(encryptedText);
-    decrypted = Buffer.concat([decrypted, cipher.final()]);
-    return decrypted.toString();
+  let textParts = text.split(':');
+  let iv = Buffer.from(textParts.shift(), 'hex');
+  let encryptedText = Buffer.from(textParts.join(':'), 'hex');
+  let decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+  let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
 }
 
 // 이메일 서비스 설정
@@ -378,8 +378,8 @@ async function initializeServer() {
   });
 
   // 회원가입 라우트
-app.post('/userregister', async (req, res) => {
-  const { email, password, name, phone, address } = req.body;
+  app.post('/userregister', async (req, res) => {
+    const { email, password, name, phone, address } = req.body;
 
   // 필수 필드 유효성 검사
   if (!email || !password || !name || !phone || !address) {
@@ -616,48 +616,58 @@ app.post('/userregister', async (req, res) => {
 
 
   // 로그인 라우트
-  app.post('/userlogin', async (req, res) => {
-    const { email, password } = req.body;
+app.post('/userlogin', async (req, res) => {
+  const { email, password } = req.body;
 
-    try {
-      // 이메일 암호화
-      const encryptedEmail = encrypt(email);
-
-      // 사용자 정보 조회
-      const [user] = await db.query('SELECT * FROM users WHERE email = ?', [encryptedEmail]);
-
-      if (user.length === 0) {
-          return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
+  try {
+    // 사용자 정보 조회
+    const [users] = await db.query('SELECT * FROM users');
+    let currentUser;
+    
+    for (let user of users) {
+      if (decrypt(user.email) === email) {
+        currentUser = user;
+        break;
       }
-
-      const currentUser = user[0];
-
-      // 이미 로그인 중인지 확인
-      if (currentUser.is_LogIn) {
-          return res.status(401).send({ message: '이미 다른 디바이스에서 로그인 중입니다.' });
-      }
-
-      // 비밀번호 확인
-      if (!await bcrypt.compare(password, currentUser.password)) {
-          return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
-      }
-
-      // 이메일 인증 확인
-      if (!currentUser.email_verified) {
-          return res.status(401).send({ message: '이메일 인증이 완료되지 않았습니다.' });
-      }
-
-      // 로그인 성공
-      logAction(email, 'Login successful');
-      await db.query('UPDATE users SET is_LogIn = 1 WHERE id = ?', [currentUser.id]);
-      await db.query('UPDATE users SET last_activity = NOW() WHERE id = ?', [currentUser.id]);
-      res.status(200).send({ message: 'Login successful', userId: currentUser.id });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send({ message: 'Server error' });
     }
-  });
 
+    if (!currentUser) {
+      logAction(email, '잘못된 이메일');
+      return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
+    }
+
+    // 이미 로그인 중인지 확인
+    if (currentUser.is_LogIn) {
+      logAction(email, '이미 로그인 중');
+      return res.status(401).send({ message: '이미 다른 디바이스에서 로그인 중입니다.' });
+    }
+
+    // 비밀번호 확인
+    const passwordMatch = await bcrypt.compare(password, currentUser.password);
+    if (!passwordMatch) {
+      logAction(email, '잘못된 비밀번호');
+      return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
+    }
+
+    // 이메일 인증 확인
+    if (!currentUser.email_verified) {
+      logAction(email, '이메일 인증 미완료');
+      return res.status(401).send({ message: '이메일 인증이 완료되지 않았습니다.' });
+    }
+
+    // 로그인 성공
+    logAction(email, 'Login successful');
+    await db.query('UPDATE users SET is_LogIn = 1 WHERE id = ?', [currentUser.id]);
+    await db.query('UPDATE users SET last_activity = NOW() WHERE id = ?', [currentUser.id]);
+    res.status(200).send({ message: 'Login successful', userId: currentUser.id });
+  } catch (err) {
+    logAction(email, `서버 오류: ${err.message}`);
+    console.error(err);
+    res.status(500).send({ message: 'Server error' });
+  }
+});
+
+  
   // 로그아웃 라우트
   app.post('/userlogout', async (req, res) => {
     const { userId } = req.body;
