@@ -10,6 +10,14 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+// 암호화 키
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+if (ENCRYPTION_KEY.length !== 32) {
+  throw new Error('Encryption key must be 32 bytes long');
+}
+
+const IV_LENGTH = 16; // 초기화 벡터 길이
+
 // 타임스탬프 함수
 const moment = require('moment-timezone');
 function getCurrentTimestamp() {
@@ -36,29 +44,20 @@ function generateRandomUserId() {
   return Math.floor(10000 + Math.random() * 90000);
 }
 
-// 암호화 키
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY; // 환경 변수에서 암호화 키 가져오기
-const IV_LENGTH = 16; // 초기화 벡터 길이
-
 // 텍스트 암호화 함수
 function encrypt(text) {
-  const iv = crypto.randomBytes(IV_LENGTH);
+  const iv = Buffer.alloc(IV_LENGTH, 0); // 항상 동일한 초기화 벡터를 사용
   const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
   let encrypted = cipher.update(text, 'utf8', 'hex');
   encrypted += cipher.final('hex');
-  const result = iv.toString('hex') + ':' + encrypted;
-  if (result.length > 255) {
-      throw new Error('Encrypted text length exceeds maximum allowed length.');
-  }
-  return result;
+  return encrypted;
 }
 
 // 복호화 함수
 function decrypt(text) {
-  let textParts = text.split(':');
-  let iv = Buffer.from(textParts.shift(), 'hex');
-  let encryptedText = Buffer.from(textParts.join(':'), 'hex');
-  let decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+  const iv = Buffer.alloc(IV_LENGTH, 0); // 동일한 초기화 벡터를 사용
+  const encryptedText = Buffer.from(text, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
   let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
   decrypted += decipher.final('utf8');
   return decrypted;
@@ -378,83 +377,74 @@ async function initializeServer() {
   });
 
   // 회원가입 라우트
-  app.post('/userregister', async (req, res) => {
-    const { email, password, name, phone, address } = req.body;
+app.post('/userregister', async (req, res) => {
+  const { email, password, name, phone, address } = req.body;
 
   // 필수 필드 유효성 검사
   if (!email || !password || !name || !phone || !address) {
-      // 클라이언트에서 메시지를 처리하도록 오류 코드만 전송
-      return res.status(400).send({ error: 'missing_fields' });
+    return res.status(400).send({ error: 'missing_fields' });
   }
 
   try {
-      // 비밀번호 해싱
-      const saltRounds = parseInt(process.env.SALT_ROUNDS); // 환경 변수에서 솔트 라운드 가져오기
-      const hashedPassword = await bcrypt.hash(password, saltRounds);
+    // 비밀번호 해싱
+    const saltRounds = parseInt(process.env.SALT_ROUNDS); // 환경 변수에서 솔트 라운드 가져오기
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-      // 이메일과 전화번호 암호화
-      const encryptedEmail = encrypt(email);
-      const encryptedPhone = encrypt(phone);
+    // 이메일과 전화번호 암호화
+    const encryptedEmail = encrypt(email);
+    const encryptedPhone = encrypt(phone);
 
-      // 고유 사용자 ID 생성
-      let userId;
-      let isUnique = false;
-      while (!isUnique) {
-          userId = generateRandomUserId();
-          const [checkUserId] = await db.query('SELECT id FROM users WHERE id = ?', [userId]);
-          if (checkUserId.length === 0) {
-              isUnique = true;
-          }
+    console.log(`암호화된 이메일 (회원가입): ${encryptedEmail}`);
+
+    // 고유 사용자 ID 생성
+    let userId;
+    let isUnique = false;
+    while (!isUnique) {
+      userId = generateRandomUserId();
+      const [checkUserId] = await db.execute('SELECT id FROM users WHERE id = ?', [userId]);
+      if (checkUserId.length === 0) {
+        isUnique = true;
       }
+    }
 
-      // 중복 이메일 검사
-      const [existingUser] = await db.query('SELECT * FROM users WHERE email = ?', [encryptedEmail]);
-      if (existingUser.length > 0) {
-          return res.status(409).send({ message: '이미 사용 중인 이메일 주소입니다.' });
-      }
+    // 중복 이메일 검사
+    const [existingUser] = await db.execute('SELECT * FROM users WHERE email = ?', [encryptedEmail]);
+    if (existingUser.length > 0) {
+      return res.status(409).send({ message: '이미 사용 중인 이메일 주소입니다.' });
+    }
 
-      // 이메일 인증 토큰 생성 및 만료 시간 설정
-      const emailVerificationToken = generateEmailVerificationToken();
-      const currentTimestamp = getCurrentTimestamp();
-      const tokenExpirationTime = moment(currentTimestamp).add(3, 'hours');
+    // 이메일 인증 토큰 생성 및 만료 시간 설정
+    const emailVerificationToken = generateEmailVerificationToken();
+    const currentTimestamp = getCurrentTimestamp();
+    const tokenExpirationTime = moment(currentTimestamp).add(3, 'hours');
 
-      // 사용자 정보 저장
-      const insertQuery = 'INSERT INTO users (id, email, password, name, phone, address, email_verification_token, token_expiration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
-      await db.query(insertQuery, [userId, encryptedEmail, hashedPassword, name, encryptedPhone, address, emailVerificationToken, tokenExpirationTime.format('YYYY-MM-DD HH:mm:ss')]);
+    // 사용자 정보 저장
+    const insertQuery = 'INSERT INTO users (id, email, password, name, phone, address, email_verification_token, token_expiration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+    await db.execute(insertQuery, [userId, encryptedEmail, hashedPassword, name, encryptedPhone, address, emailVerificationToken, tokenExpirationTime.format('YYYY-MM-DD HH:mm:ss')]);
 
-      logAction(email, `Account registered with ID ${userId}`);
+    logAction(email, `Account registered with ID ${userId}`);
 
-      // 이메일 발송 로직 호출
-      try {
-          await sendVerificationEmail(email, emailVerificationToken, tokenExpirationTime);
-          res.status(200).send({ message: 'Verification email sent successfully' });
-      } catch (error) {
-          res.status(500).send({ message: 'Error sending verification email' });
-          logAction(email, `Error sending verification email: ${error.message}`);
-      }
+    // 이메일 발송 로직 호출
+    try {
+      await sendVerificationEmail(email, emailVerificationToken, tokenExpirationTime);
+      res.status(200).send({ message: 'Verification email sent successfully' });
+    } catch (error) {
+      res.status(500).send({ message: 'Error sending verification email' });
+      logAction(email, `Error sending verification email: ${error.message}`);
+    }
   } catch (err) {
-      if (err.code === 'ER_DUP_ENTRY') {
-          // 중복 이메일 오류 처리
-          return res.status(409).send({ message: '이미 사용 중인 이메일 주소입니다.' });
-      }
+    if (err.code === 'ER_DUP_ENTRY') {
+      // 중복 이메일 오류 처리
+      return res.status(409).send({ message: '이미 사용 중인 이메일 주소입니다.' });
+    }
 
-      // email 변수 존재여부 확인
-      const email = req.body.email || 'Unknown';
-      logAction(email, `Server error on registering: ${err.message}`);
-      res.status(500).send({ message: 'Server error' });
+    // email 변수 존재여부 확인
+    const email = req.body.email || 'Unknown';
+    logAction(email, `Server error on registering: ${err.message}`);
+    res.status(500).send({ message: 'Server error' });
   }
 });
 
-  // 카테고리 목록 조회 라우트
-  app.get('/categories', async (req, res) => {
-    try {
-      const [categories] = await db.query('SELECT * FROM categories');
-      res.send(categories);
-    } catch (err) {
-      logAction('System', `Failed to fetch categories: ${err.message}`);
-      res.status(500).send({ message: 'Server error' });
-    }
-  });
 
   // 카테고리 추가 라우트
   app.post('/categories', async (req, res) => {
@@ -620,53 +610,49 @@ app.post('/userlogin', async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    // 사용자 정보 조회
-    const [users] = await db.query('SELECT * FROM users');
-    let currentUser;
-    
-    for (let user of users) {
-      if (decrypt(user.email) === email) {
-        currentUser = user;
-        break;
-      }
-    }
+    console.log(`입력된 이메일: ${email}`);
 
-    if (!currentUser) {
-      logAction(email, '잘못된 이메일');
+    // 사용자 입력 이메일 암호화
+    const encryptedEmail = encrypt(email);
+    console.log(`암호화된 이메일: ${encryptedEmail}`);
+
+    // prepared statement 사용하여 사용자 정보 조회
+    const query = 'SELECT * FROM users WHERE email = ?';
+    const [user] = await db.execute(query, [encryptedEmail]);
+
+    console.log(`조회된 사용자: ${JSON.stringify(user)}`);
+
+    if (user.length === 0) {
       return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
     }
 
+    const currentUser = user[0];
+
     // 이미 로그인 중인지 확인
     if (currentUser.is_LogIn) {
-      logAction(email, '이미 로그인 중');
       return res.status(401).send({ message: '이미 다른 디바이스에서 로그인 중입니다.' });
     }
 
     // 비밀번호 확인
     const passwordMatch = await bcrypt.compare(password, currentUser.password);
     if (!passwordMatch) {
-      logAction(email, '잘못된 비밀번호');
       return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
     }
 
     // 이메일 인증 확인
     if (!currentUser.email_verified) {
-      logAction(email, '이메일 인증 미완료');
       return res.status(401).send({ message: '이메일 인증이 완료되지 않았습니다.' });
     }
 
     // 로그인 성공
     logAction(email, 'Login successful');
-    await db.query('UPDATE users SET is_LogIn = 1 WHERE id = ?', [currentUser.id]);
-    await db.query('UPDATE users SET last_activity = NOW() WHERE id = ?', [currentUser.id]);
+    await db.query('UPDATE users SET is_LogIn = 1, last_activity = NOW() WHERE id = ?', [currentUser.id]);
     res.status(200).send({ message: 'Login successful', userId: currentUser.id });
   } catch (err) {
-    logAction(email, `서버 오류: ${err.message}`);
     console.error(err);
     res.status(500).send({ message: 'Server error' });
   }
 });
-
   
   // 로그아웃 라우트
   app.post('/userlogout', async (req, res) => {
@@ -843,7 +829,7 @@ app.post('/userlogin', async (req, res) => {
     const userId = req.params.userId;
 
     try {
-      const [results] = await db.query('SELECT email, name, phone FROM users WHERE id = ?', [userId]);
+      const [results] = await db.execute('SELECT email, name, phone FROM users WHERE id = ?', [userId]);
 
       if (results.length > 0) {
         const userInfo = results[0];
