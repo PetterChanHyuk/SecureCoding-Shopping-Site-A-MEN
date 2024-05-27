@@ -88,7 +88,7 @@ export default {
     search() {
       const validatedQuery = this.validateSearchQuery(this.searchQuery);
       if (!validatedQuery) {
-        alert('Invalid search query. Please enter alphanumeric characters only.');
+        alert('Invalid search query. Please enter valid characters only.');
         return;
       }
       this.filteredQuery = validatedQuery;
@@ -99,7 +99,7 @@ export default {
       if (!regex.test(query)) {
         return false;
       }
-      return this.escapeHtml(query);
+      return query.trim().replace(/[^a-zA-Z가-힣0-9 ]/g, '');
     },
     refreshPage() {
       window.location.reload();
