@@ -348,7 +348,7 @@ async function initializeServer() {
   const limiter = rateLimit({
     windowMs: 10 * 60 * 1000, // 10분
     max: 150, // 10분 동안 최대 150회 요청 허용
-    message: '10분 동안 최대 150회 요청이 허용됩니다. 잠시 후 다시 시도해주세요.',
+    message: JSON.stringify({ message: 'Too many requests, please try again later.' }), // 응답 메시지 설정
     headers: true,
   });
 

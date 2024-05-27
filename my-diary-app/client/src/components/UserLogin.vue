@@ -23,12 +23,12 @@
 
   export default {
     data() {
-        return {
+      return {
         email: '',
         password: '',
         errorMessage: '', // 로그인 실패 시 에러 메시지를 저장할 변수
-        loginDelay: false //로그인 버튼 딜레이를 주기 위한 변수
-        };
+        loginDelay: false // 로그인 버튼 딜레이를 주기 위한 변수
+      };
     },
     methods: {
       login() {
@@ -51,7 +51,7 @@
           email: this.email,
           password: this.password
         };
-        
+
         axios.post(`${process.env.VUE_APP_BACKEND_URL}/userlogin`, userData)
           .then(response => {
             // 로그인 성공
@@ -66,32 +66,33 @@
               if (error.response.status === 401) {
                 if (error.response.data.message === '이메일 인증이 완료되지 않았습니다.') {
                   alert("이메일 인증이 완료되지 않았습니다.");
-                }
-                else if (error.response.data.message === '이미 다른 디바이스에서 로그인 중입니다.') {
+                } else if (error.response.data.message === '이미 다른 디바이스에서 로그인 중입니다.') {
                   alert("이미 다른 디바이스에서 로그인 중입니다.");
-                }
-                else {
+                } else {
                   alert("잘못된 정보입니다.\n다시 확인해주세요.");
                 }
+              } else if (error.response.status === 429) {
+                // rate limit 초과 시 처리
+                alert("요청이 너무 많습니다. 잠시 후 다시 시도해주세요.");
               } else {
-                alert(`${process.env.VUE_APP_BACKEND_URL}`);
                 alert("알 수 없는 오류가 발생했습니다.");
               }
+              console.error('로그인 실패:', error.response.data.message);
             } else {
               alert("알 수 없는 오류가 발생했습니다.");
+              console.error('로그인 실패:', error);
             }
-            console.error('로그인 실패:', error.response);
             this.errorMessage = error.response ? error.response.data.message : "로그인에 실패했습니다.";
 
             setTimeout(() => {
               this.loginDelay = false;
             }, 1000);
-        });
+          });
       }
     }
   };
 </script>
-  
+
 <style scoped>
 .login-container {
   display: flex;
@@ -148,9 +149,9 @@
 }
 
 .login-btn.disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
-  }
+  background-color: #ccc;
+  cursor: not-allowed;
+}
 
 .links {
   text-align: center;
