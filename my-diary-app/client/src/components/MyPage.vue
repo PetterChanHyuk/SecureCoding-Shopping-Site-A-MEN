@@ -5,16 +5,16 @@
     <div class="user-name-section">
       {{ userName }} 님
     </div>
-    <div class="user-info-section" @click="showUserInfo">
+    <div class="section" @click="showUserInfo">
       내 정보 조회
     </div>
-    <div class="password-reset-section" @click="ResetPassword">
+    <div class="section" @click="ResetPassword">
       비밀번호 재설정
     </div>
-    <div class="add-item-section">
+    <div class="section">
       <router-link to="/add-item">아이템 추가하기</router-link>
     </div>
-    <div class="edit-item-section">
+    <div class="section">
       <router-link to="/edit-item/1">아이템 수정하기</router-link>
     </div>
     <div class="go-to-main-section">
@@ -27,10 +27,10 @@
         <button @click="deleteItem(item.id)">삭제</button>
       </div>
     </div>
-    <div class="cart-section">
+    <div class="section">
       <router-link to="/cart">내 장바구니 보기</router-link>
     </div>
-    <div class="order-section">
+    <div class="section">
       <router-link to="/orders">구매 목록 보기</router-link>
     </div>
   </div>
@@ -99,16 +99,16 @@ export default {
       });
     },
     deleteItem(itemId) {
-    const userId = localStorage.getItem('userId');
-    axios.delete(`${process.env.VUE_APP_BACKEND_URL}/items/${itemId}`, { data: { userId } })
-      .then(() => {
-        this.items = this.items.filter(item => item.id !== itemId);
-        alert('아이템이 성공적으로 삭제되었습니다.');
-      })
-      .catch(error => {
-        console.error('Failed to delete item:', error);
-        alert('아이템 삭제에 실패했습니다.');
-      });
+      const userId = localStorage.getItem('userId');
+      axios.delete(`${process.env.VUE_APP_BACKEND_URL}/items/${itemId}`, { data: { userId } })
+        .then(() => {
+          this.items = this.items.filter(item => item.id !== itemId);
+          alert('아이템이 성공적으로 삭제되었습니다.');
+        })
+        .catch(error => {
+          console.error('Failed to delete item:', error);
+          alert('아이템 삭제에 실패했습니다.');
+        });
     },
     resetTimer() {
       this.remainingTime = 600;
@@ -167,53 +167,57 @@ export default {
 
 <style>
 .my-container {
-  max-width: 600px;
-  margin: 50px auto;
+  max-width: 500px;
+  margin: 40px auto;
   padding: 20px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   text-align: center;
-  background-color: #f8f9fa;
+  background-color: #fff;
   border-radius: 10px;
+  font-family: 'Arial', sans-serif;
 }
 
 .my-title {
-  font-size: 2.5rem;
+  font-size: 2rem;
   margin-bottom: 20px;
-  color: #343a40;
+  color: #333;
+  font-weight: bold;
 }
 
 .user-name-section {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   margin-bottom: 20px;
-  color: #495057;
+  color: #666;
 }
 
-.user-info-section, .password-reset-section, .add-item-section, .edit-item-section, .go-to-main-section, .item-list-section, .cart-section, .order-section {
+.section {
   width: 100%;
-  padding: 15px 0;
-  cursor: pointer;
-  font-size: 1.25rem;
+  padding: 12px 0;
+  font-size: 1.125rem;
   color: #007bff;
   text-decoration: none;
   text-align: center;
-  border: 1px solid #dee2e6;
+  border: 1px solid #007bff;
   border-radius: 5px;
-  margin-bottom: 10px;
+  margin-bottom: 15px;
+  transition: background-color 0.3s, color 0.3s;
 }
 
-.user-info-section:hover, .password-reset-section:hover, .add-item-section:hover, .edit-item-section:hover, .go-to-main-section:hover, .item-list-section:hover, .cart-section:hover, .order-section:hover {
-  background-color: #e9ecef;
+.section:hover {
+  background-color: #007bff;
+  color: white;
+  cursor: pointer;
 }
 
 button {
   padding: 10px 20px;
-  font-size: 16px;
+  font-size: 1rem;
   cursor: pointer;
-  margin-top: 10px;
   background-color: #007bff;
   color: white;
   border: none;
   border-radius: 5px;
+  transition: background-color 0.3s;
 }
 
 button:hover {
@@ -222,9 +226,11 @@ button:hover {
 
 .item-list-section {
   text-align: left;
-  background-color: #ffffff;
+  background-color: #f8f9fa;
   padding: 20px;
   border-radius: 10px;
+  border: 1px solid #ddd;
+  margin-bottom: 20px;
 }
 
 .item {
@@ -232,23 +238,33 @@ button:hover {
   justify-content: space-between;
   align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid #dee2e6;
+  border-bottom: 1px solid #ddd;
 }
 
 .item p {
   margin: 0;
   font-size: 1rem;
-  color: #495057;
+  color: #333;
 }
 
 .item button {
   background-color: #dc3545;
   padding: 5px 10px;
   font-size: 0.875rem;
+  border: none;
   border-radius: 5px;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.3s;
 }
 
 .item button:hover {
   background-color: #c82333;
+}
+
+.timer {
+  font-size: 0.875rem;
+  color: #dc3545;
+  margin-bottom: 15px;
 }
 </style>

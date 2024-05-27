@@ -12,9 +12,9 @@
         <label for="category">Category</label>
         <div class="category-input-container">
           <select id="category" v-model="selectedCategoryId" required size="1" class="category-select">
-              <option v-for="category in categories" :key="category.id" :value="category.id">
-                {{ category.name }}
-              </option>
+            <option v-for="category in categories" :key="category.id" :value="category.id">
+              {{ category.name }}
+            </option>
           </select>
         </div>
         <input type="text" v-model="newCategory" @input="validateNewCategory" placeholder="Add new category" />
@@ -36,7 +36,7 @@
         <label for="file">Image</label>
         <input type="file" id="file" @change="onFileChange" />
       </div>
-      
+
       <button type="submit">추가</button>
     </form>
   </div>
@@ -53,13 +53,26 @@ export default {
       newCategory: '',
       itemDescription: '',
       file: null,
-      price: 0, // price 필드 추가
+      price: 0,
       categories: [],
       itemNameError: '',
       newCategoryError: ''
     };
   },
   methods: {
+    escapeHtml(text) {
+      return text.replace(/[&<>"'`=]/g, function (s) {
+        return {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+          '`': '&#x60;',
+          '=': '&#x3D;'
+        }[s];
+      });
+    },
     validateItemName() {
       const regex = /^[a-zA-Z0-9가-힣\s]+$/;
       if (!regex.test(this.itemName)) {
@@ -79,7 +92,10 @@ export default {
     async fetchCategories() {
       try {
         const response = await axios.get(`${process.env.VUE_APP_BACKEND_URL}/categories`);
-        this.categories = response.data;
+        this.categories = response.data.map(category => ({
+          ...category,
+          name: this.escapeHtml(category.name)
+        }));
       } catch (err) {
         console.error('카테고리 목록을 불러오는 데 실패했습니다:', err);
       }
@@ -109,9 +125,12 @@ export default {
 
       try {
         const response = await axios.post(`${process.env.VUE_APP_BACKEND_URL}/categories`, {
-          name: this.newCategory
+          name: this.escapeHtml(this.newCategory)
         });
-        this.categories.push(response.data);
+        this.categories.push({
+          ...response.data,
+          name: this.escapeHtml(response.data.name)
+        });
         this.newCategory = '';
       } catch (err) {
         console.error('카테고리 추가에 실패했습니다:', err);
@@ -124,7 +143,7 @@ export default {
         alert('모든 필수 항목을 올바르게 입력해 주세요.');
         return;
       }
-      
+
       let imageUrl = '';
       if (this.file) {
         const formData = new FormData();
@@ -146,10 +165,10 @@ export default {
 
       try {
         const response = await axios.post(`${process.env.VUE_APP_BACKEND_URL}/items`, {
-          name: this.itemName,
+          name: this.escapeHtml(this.itemName),
           categoryId: this.selectedCategoryId,
           imageUrl,
-          description: this.itemDescription,
+          description: this.escapeHtml(this.itemDescription),
           userId, // 사용자 ID 추가
           price: this.price // price 추가
         });
@@ -186,7 +205,7 @@ export default {
 }
 
 .category-select {
-  flex: 0 0 50%; /* 50%의 고정된 너비 */
+  flex: 0 0 50%;
   margin-right: 10px;
   margin-bottom: 10px;
   overflow-y: auto;

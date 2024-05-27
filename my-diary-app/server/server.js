@@ -1102,25 +1102,27 @@ app.delete('/orders/:orderId', async (req, res) => {
 });
 
   // 사용자 정보 조회 라우트
-  app.get('/userinfo/:userId', async (req, res) => {
-    const userId = req.params.userId;
+app.get('/userinfo/:userId', async (req, res) => {
+  const userId = req.params.userId;
 
-    try {
-      const [results] = await db.execute('SELECT email, name, phone FROM users WHERE id = ?', [userId]);
+  try {
+    const [results] = await db.execute('SELECT email, name, phone FROM users WHERE id = ?', [userId]);
 
-      if (results.length > 0) {
-        const userInfo = results[0];
-        logAction(userId, `Userinfo request: User information retrieved`);
-        res.send(userInfo);
-      } else {
-        logAction(userId, 'Userinfo request: User not found');
-        res.status(404).send({ message: 'User not found' });
-      }
-    } catch (err) {
-      logAction(userId, `Userinfo request error: ${err.message}`);
-      return res.status(500).send({ message: 'Server error' });
+    if (results.length > 0) {
+      const userInfo = results[0];
+      const decryptedEmail = decrypt(userInfo.email);
+      const decryptedPhone = decrypt(userInfo.phone);
+      logAction(userId, `Userinfo request: User information retrieved`);
+      res.send({ email: decryptedEmail, name: userInfo.name, phone: decryptedPhone });
+    } else {
+      logAction(userId, 'Userinfo request: User not found');
+      res.status(404).send({ message: 'User not found' });
     }
-  });
+  } catch (err) {
+    logAction(userId, `Userinfo request error: ${err.message}`);
+    return res.status(500).send({ message: 'Server error' });
+  }
+});
 
   // 서버 시작
   app.listen(3000, '0.0.0.0', () => {
