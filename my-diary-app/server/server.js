@@ -857,7 +857,10 @@ app.get('/items', async (req, res) => {
 
     try {
       // 사용자 정보 확인
-      const [user] = await db.query('SELECT * FROM users WHERE email = ? AND name = ? AND phone = ?', [email, name, phone]);
+      const encryptedEmail = encrypt(email);  // 이메일 암호화
+      const encryptedPhone = encrypt(phone);  // 전화번호 암호화
+      
+      const [user] = await db.query('SELECT * FROM users WHERE email = ? AND name = ? AND phone = ?', [encryptedEmail, name, encryptedPhone]);
 
       if (!user || user.length === 0) {
         return res.status(404).send({ message: '사용자를 찾을 수 없습니다.' });
@@ -929,7 +932,8 @@ app.get('/items', async (req, res) => {
     }
 
     try {
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      const saltRounds = parseInt(process.env.SALT_ROUNDS); // 환경 변수에서 솔트 라운드 가져오기
+      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
       await db.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, userId]);
       logAction(userId, `UpdatePassword request: Password updated successfully`);
       res.send({ message: 'Password updated successfully' });
