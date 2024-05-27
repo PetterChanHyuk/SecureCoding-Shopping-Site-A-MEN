@@ -8,13 +8,14 @@ import ResetPassword from '../components/ResetPassword';
 import EmailVerification from '../components/EmailVerification.vue';
 import AddItem from '@/components/AddItem';
 import EditItem from '@/components/EditItem';
+import CartPage from '@/components/CartPage.vue'; // 새로 추가된 컴포넌트
+import OrderHistoryPage from '@/components/OrderHistoryPage.vue'; // 새로 추가된 컴포넌트
 
-// 라우터 정의
 const routes = [
   {
     path: '/',
     name: 'Home',
-    component: UserLogin // 기본 페이지로 설정
+    component: UserLogin
   },
   {
     path: '/userlogin',
@@ -61,15 +62,23 @@ const routes = [
     name: 'EditItem',
     component: EditItem
   },
+  {
+    path: '/cart',
+    name: 'CartPage',
+    component: CartPage
+  },
+  {
+    path: '/orders',
+    name: 'OrderHistoryPage',
+    component: OrderHistoryPage
+  },
 ];
 
-// 라우터 인스턴스 생성 및 내보내기
 const router = createRouter({
   history: createWebHistory(process.env.BASE_URL),
   routes
 });
 
-// HTTPS 강제를 위한 글로벌 가드 추가
 router.beforeEach((to, from, next) => {
   if (window.location.protocol !== 'https:' && process.env.NODE_ENV === 'production') {
     window.location.href = 'https://' + window.location.hostname + window.location.pathname + window.location.hash;

@@ -1,46 +1,37 @@
 <template>
   <div class="my-container">
     <div class="timer">자동 로그아웃: {{ remainingTime }}초</div>
-    <!-- 페이지 제목 -->
     <h1 class="my-title">My Page</h1>
-
-    <!-- 사용자 이름 표시 -->
     <div class="user-name-section">
       {{ userName }} 님
     </div>
-
-    <!-- 내 정보 -->
     <div class="user-info-section" @click="showUserInfo">
       내 정보 조회
     </div>
-
-    <!-- 비밀번호 재설정 -->
     <div class="password-reset-section" @click="ResetPassword">
       비밀번호 재설정
     </div>
-
-    <!-- 아이템 추가하기 -->
     <div class="add-item-section">
       <router-link to="/add-item">아이템 추가하기</router-link>
     </div>
-
-    <!-- 아이템 수정하기 -->
     <div class="edit-item-section">
-      <router-link to="/edit-item/1">아이템 수정하기</router-link> <!-- 임시로 1번 아이템을 수정하는 링크 -->
+      <router-link to="/edit-item/1">아이템 수정하기</router-link>
     </div>
-
-    <!-- 메인 페이지로 이동하기 -->
     <div class="go-to-main-section">
       <button @click="goToMainPage">메인 페이지로 이동</button>
     </div>
-
-    <!-- 아이템 목록 -->
     <div class="item-list-section">
       <h2>내 아이템 목록</h2>
       <div v-for="item in items" :key="item.id" class="item">
         <p>{{ item.name }}</p>
         <button @click="deleteItem(item.id)">삭제</button>
       </div>
+    </div>
+    <div class="cart-section">
+      <router-link to="/cart">내 장바구니 보기</router-link>
+    </div>
+    <div class="order-section">
+      <router-link to="/orders">구매 목록 보기</router-link>
     </div>
   </div>
 </template>
@@ -52,9 +43,9 @@ export default {
   data() {
     return {
       userName: '익명',
-      remainingTime: 600, // 초단위 (10분)
+      remainingTime: 600,
       timer: null,
-      items: [] // 아이템 목록 추가
+      items: []
     };
   },
   methods: {
@@ -84,19 +75,19 @@ export default {
     },
     fetchUserName() {
       axios.get(`${process.env.VUE_APP_BACKEND_URL}/username`, {
-          params: {
-          userId: localStorage.getItem('userId') // 사용자 ID 가져오기
-          }
+        params: {
+          userId: localStorage.getItem('userId')
+        }
       })
       .then(response => {
-          this.userName = response.data.name; // 사용자 이름 설정
+        this.userName = response.data.name;
       })
       .catch(error => {
-          console.error('Error fetching user name:', error);
+        console.error('Error fetching user name:', error);
       });
     },
     fetchItems() {
-      const userId = localStorage.getItem('userId'); // 현재 로그인한 사용자 ID 가져오기
+      const userId = localStorage.getItem('userId');
       axios.get(`${process.env.VUE_APP_BACKEND_URL}/items`, {
         params: { userId }
       })
@@ -108,35 +99,35 @@ export default {
       });
     },
     deleteItem(itemId) {
-      const userId = localStorage.getItem('userId');
-      axios.delete(`${process.env.VUE_APP_BACKEND_URL}/items/${itemId}`, { data: { userId } })
-        .then(() => {
-          this.items = this.items.filter(item => item.id !== itemId);
-          alert('아이템이 성공적으로 삭제되었습니다.');
-        })
-        .catch(error => {
-          console.error('Failed to delete item:', error);
-          alert('아이템 삭제에 실패했습니다.');
-        });
+    const userId = localStorage.getItem('userId');
+    axios.delete(`${process.env.VUE_APP_BACKEND_URL}/items/${itemId}`, { data: { userId } })
+      .then(() => {
+        this.items = this.items.filter(item => item.id !== itemId);
+        alert('아이템이 성공적으로 삭제되었습니다.');
+      })
+      .catch(error => {
+        console.error('Failed to delete item:', error);
+        alert('아이템 삭제에 실패했습니다.');
+      });
     },
     resetTimer() {
-      this.remainingTime = 600; // 타이머를 10분으로 재설정
+      this.remainingTime = 600;
     },
     updateTimer() {
       if (this.remainingTime > 0) {
         this.remainingTime--;
       } else {
-        this.logout(); // 타이머가 0이 되면 로그아웃 실행
+        this.logout();
       }
     },
     logout() {
-      clearInterval(this.timerId); // 타이머 초기화
+      clearInterval(this.timer);
       const userId = localStorage.getItem('userId');
       if (userId) {
         axios.post(`${process.env.VUE_APP_BACKEND_URL}/userlogout`, { userId })
           .then(() => {
             localStorage.removeItem('userId');
-            this.$router.push('/userlogin'); // 로그인 페이지로 리디렉션
+            this.$router.push('/userlogin');
           })
           .catch(error => {
             console.error('로그아웃 실패:', error);
@@ -151,27 +142,23 @@ export default {
     }
   },
   created() {
-    this.fetchUserName(); // 컴포넌트 생성 시 사용자 이름 조회
-    this.fetchItems(); // 아이템 목록 조회
+    this.fetchUserName();
+    this.fetchItems();
     
-    // 로컬 스토리지에서 사용자 ID 확인
     const userId = localStorage.getItem('userId');
-
-    // 사용자 ID가 없으면 로그인 페이지로 리디렉션
     if (!userId) {
       alert("비정상적인 접근입니다.");
       this.$router.push('/userlogin');
     }
   },
   mounted() {
-    this.timer = setInterval(this.updateTimer, 1000); // 1초마다 타이머 감소
+    this.timer = setInterval(this.updateTimer, 1000);
 
-    // 사용자 활동 감지
     window.addEventListener('mousemove', this.resetTimer);
     window.addEventListener('keydown', this.resetTimer);
-  }, 
+  },
   beforeUnmount() {
-    clearInterval(this.timer); // 컴포넌트가 제거되면 타이머 정리
+    clearInterval(this.timer);
     window.removeEventListener('mousemove', this.resetTimer);
     window.removeEventListener('keydown', this.resetTimer);
   }
@@ -201,7 +188,7 @@ export default {
   color: #495057;
 }
 
-.user-info-section, .password-reset-section, .add-item-section, .edit-item-section, .go-to-main-section, .item-list-section {
+.user-info-section, .password-reset-section, .add-item-section, .edit-item-section, .go-to-main-section, .item-list-section, .cart-section, .order-section {
   width: 100%;
   padding: 15px 0;
   cursor: pointer;
@@ -214,7 +201,7 @@ export default {
   margin-bottom: 10px;
 }
 
-.user-info-section:hover, .password-reset-section:hover, .add-item-section:hover, .edit-item-section:hover, .go-to-main-section:hover, .item-list-section:hover {
+.user-info-section:hover, .password-reset-section:hover, .add-item-section:hover, .edit-item-section:hover, .go-to-main-section:hover, .item-list-section:hover, .cart-section:hover, .order-section:hover {
   background-color: #e9ecef;
 }
 

@@ -9,6 +9,7 @@ const nodemailer = require('nodemailer');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const moment = require('moment-timezone');
 
 // 암호화 키
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
@@ -19,7 +20,6 @@ if (ENCRYPTION_KEY.length !== 32) {
 const IV_LENGTH = 16; // 초기화 벡터 길이
 
 // 타임스탬프 함수
-const moment = require('moment-timezone');
 function getCurrentTimestamp() {
   return moment().tz('Asia/Seoul').format('YYYY-MM-DD HH:mm:ss');
 }
@@ -71,8 +71,8 @@ const transporter = nodemailer.createTransport({
   secure: true,
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
+    pass: process.env.EMAIL_PASS,
+  },
 });
 
 // 이메일 인증 토큰 생성 함수
@@ -93,7 +93,7 @@ async function sendVerificationEmail(email, emailVerificationToken, tokenExpirat
     from: 'chishahaboy@gmail.com',
     to: email,
     subject: '이메일 인증',
-    html: `<p>이메일 인증을 위해 아래 링크를 클릭해주세요.<br>해당 링크는 <strong>${formattedExpirationTime}</strong>까지 유효합니다.<br><br><span style="font-size:'30px'"><a href="${verificationLink}"  style="font-size:200%; text-decoration:none;"">인증하기</a></span></p>`
+    html: `<p>이메일 인증을 위해 아래 링크를 클릭해주세요.<br>해당 링크는 <strong>${formattedExpirationTime}</strong>까지 유효합니다.<br><br><span style="font-size:'30px'"><a href="${verificationLink}"  style="font-size:200%; text-decoration:none;"">인증하기</a></span></p>`,
   };
 
   try {
@@ -109,20 +109,20 @@ async function sendVerificationEmail(email, emailVerificationToken, tokenExpirat
 async function sendPasswordResetEmail(email, resetLink, expirationTime) {
   const formattedExpirationTime = moment(expirationTime).format('YYYY-MM-DD HH:mm:ss');
   const mailOptions = {
-    from: 'chishahaboy@gmail.com', // 발신자 이메일 주소
-    to: email, // 수신자 이메일 주소
-    subject: '비밀번호 재설정 요청', // 이메일 제목
+    from: 'chishahaboy@gmail.com',
+    to: email,
+    subject: '비밀번호 재설정 요청',
     html: `
       <p>비밀번호를 재설정하려면 아래 링크를 클릭하세요:<br>해당 링크는 <strong>${formattedExpirationTime}</strong>까지 유효합니다.<br><br></p>
       <a href="${resetLink}" style="font-size:200%; text-decoration:none;">비밀번호 재설정</a>
-    `
+    `,
   };
 
   try {
     await transporter.sendMail(mailOptions);
     logAction(email, `Password reset email sent`);
   } catch (error) {
-    logAction(email, `Error sending password reset email: ${error}`);
+    logAction(email, `Error sending password reset email: ${error.message}`);
     throw new Error('Error sending password reset email');
   }
 }
@@ -147,7 +147,7 @@ async function deleteExpiredAccounts(db) {
 
 // 서버 초기화 및 데이터베이스 설정
 async function initializeServer() {
-  const uploadDir = path.join(__dirname, 'uploads');  // 이미지 업로드 경로 설정
+  const uploadDir = path.join(__dirname, 'uploads'); // 이미지 업로드 경로 설정
 
   try {
     // 데이터베이스 연결 설정
@@ -162,15 +162,15 @@ async function initializeServer() {
     logAction('System', 'MySQL successfully connected!');
 
     // mallDB 데이터베이스 생성
-    const [dbCreateResult] = await db.query("CREATE DATABASE IF NOT EXISTS mallDB");
+    const [dbCreateResult] = await db.query('CREATE DATABASE IF NOT EXISTS mallDB');
     // mallDB 데이터베이스 존재 여부 확인
     const [dbs] = await db.query("SHOW DATABASES LIKE 'mallDB'");
     if (dbs.length === 0) {
       // mallDB 데이터베이스 생성
-      await db.query("CREATE DATABASE mallDB");
-      logAction('System', "mallDB created!");
+      await db.query('CREATE DATABASE mallDB');
+      logAction('System', 'mallDB created!');
     } else {
-      logAction('System', "mallDB already exists!");
+      logAction('System', 'mallDB already exists!');
     }
 
     // mallDB 데이터베이스 연결
@@ -224,6 +224,7 @@ async function initializeServer() {
           description TEXT,
           user_id INT,
           image_url VARCHAR(255), -- 이미지 URL 필드 추가
+          price DECIMAL(10, 2) NOT NULL, -- 가격 필드 추가
           FOREIGN KEY (category_id) REFERENCES categories(id)
         )`;
       await db.query(createItemsTable);
@@ -249,6 +250,60 @@ async function initializeServer() {
       logAction('System', "Table 'password_reset_tokens' already exists!");
     }
 
+    // cart 테이블 존재 여부 확인 및 생성
+    const [cartTables] = await db.query("SHOW TABLES LIKE 'cart'");
+    if (cartTables.length === 0) {
+      const createCartTable = `
+        CREATE TABLE cart (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT,
+          item_id INT,
+          quantity INT,
+          added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id),
+          FOREIGN KEY (item_id) REFERENCES items(id)
+        )`;
+      await db.query(createCartTable);
+      logAction('System', "Table 'cart' created!");
+    } else {
+      logAction('System', "Table 'cart' already exists!");
+    }
+
+    // orders 테이블 존재 여부 확인 및 생성
+    const [ordersTables] = await db.query("SHOW TABLES LIKE 'orders'");
+    if (ordersTables.length === 0) {
+      const createOrdersTable = `
+        CREATE TABLE orders (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT,
+          total_amount DECIMAL(10, 2),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id)
+        )`;
+      await db.query(createOrdersTable);
+      logAction('System', "Table 'orders' created!");
+    } else {
+      logAction('System', "Table 'orders' already exists!");
+    }
+
+    // order_items 테이블 존재 여부 확인 및 생성
+    const [orderItemsTables] = await db.query("SHOW TABLES LIKE 'order_items'");
+    if (orderItemsTables.length === 0) {
+      const createOrderItemsTable = `
+        CREATE TABLE order_items (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          order_id INT,
+          item_id INT,
+          quantity INT,
+          FOREIGN KEY (order_id) REFERENCES orders(id),
+          FOREIGN KEY (item_id) REFERENCES items(id)
+        )`;
+      await db.query(createOrderItemsTable);
+      logAction('System', "Table 'order_items' created!");
+    } else {
+      logAction('System', "Table 'order_items' already exists!");
+    }
+
     // 만료된 계정 삭제
     await deleteExpiredAccounts(db);
 
@@ -266,16 +321,18 @@ async function initializeServer() {
     },
     filename: function (req, file, cb) {
       cb(null, Date.now() + path.extname(file.originalname)); // 파일 이름 설정
-    }
+    },
   });
   const upload = multer({ storage: storage });
 
   // Express 앱 설정
   const app = express();
-  app.use(cors({
-    origin: `${process.env.VUE_APP_FRONTEND_URL}`,
-    credentials: true
-  }));
+  app.use(
+    cors({
+      origin: `${process.env.VUE_APP_FRONTEND_URL}`,
+      credentials: true,
+    })
+  );
   app.use(bodyParser.json());
   app.use('/uploads', express.static(uploadDir));
 
@@ -311,11 +368,11 @@ async function initializeServer() {
   app.put('/items/:id', async (req, res) => {
     const { id } = req.params;
     const { name, categoryId, imageUrl, description, userId } = req.body;
-  
+
     if (!name || !categoryId || !userId) {
       return res.status(400).send({ message: 'Missing name, categoryId, or userId' });
     }
-  
+
     try {
       const [result] = await db.query('SELECT * FROM items WHERE id = ?', [id]);
       if (result.length === 0) {
@@ -324,7 +381,7 @@ async function initializeServer() {
       if (result[0].user_id !== parseInt(userId, 10)) {
         return res.status(403).send({ message: 'Unauthorized' });
       }
-  
+
       const updateQuery = 'UPDATE items SET name = ?, category_id = ?, image_url = ?, description = ? WHERE id = ?';
       await db.query(updateQuery, [name, categoryId, imageUrl, description, id]);
       res.status(200).send({ message: 'Item updated successfully' });
@@ -335,116 +392,129 @@ async function initializeServer() {
   });
 
   // 아이템 삭제 라우트
-  app.delete('/items/:id', async (req, res) => {
-    const { id } = req.params;
-    const { userId } = req.body;
-
-    try {
-      const [result] = await db.query('SELECT * FROM items WHERE id = ?', [id]);
-      if (result.length === 0) {
-        return res.status(404).send({ message: 'Item not found' });
-      }
-      if (result[0].user_id !== parseInt(userId, 10)) {
-        return res.status(403).send({ message: 'Unauthorized' });
-      }
-
-      await db.query('DELETE FROM items WHERE id = ?', [id]);
-      res.status(200).send({ message: 'Item deleted successfully' });
-    } catch (err) {
-      console.error(`Failed to delete item: ${err.message}`);
-      res.status(500).send({ message: 'Server error' });
-    }
-  });
-
-  // 아이템 추가 라우트에 설명 필드 추가
-  app.post('/items', async (req, res) => {
-    const { name, categoryId, imageUrl, description, userId } = req.body;
-
-    if (!name || !categoryId || !userId) {
-      console.error('Missing name, categoryId, or userId');
-      return res.status(400).send({ message: 'Missing name or categoryId' });
-    }
-
-    try {
-      const insertQuery = 'INSERT INTO items (name, category_id, image_url, description, user_id) VALUES (?, ?, ?, ?, ?)';
-      await db.query(insertQuery, [name, categoryId, imageUrl, description, userId]);
-      console.log(`Item added: ${name}, Category: ${categoryId}, Image: ${imageUrl}, Description: ${description}, User: ${userId}`);
-      res.status(201).send({ message: 'Item added successfully' });
-    } catch (err) {
-      console.error(`Failed to add item: ${err.message}`);
-      res.status(500).send({ message: 'Server error', error: err.message });
-    }
-  });
-
-  // 회원가입 라우트
-app.post('/userregister', async (req, res) => {
-  const { email, password, name, phone, address } = req.body;
-
-  // 필수 필드 유효성 검사
-  if (!email || !password || !name || !phone || !address) {
-    return res.status(400).send({ error: 'missing_fields' });
-  }
+app.delete('/items/:id', async (req, res) => {
+  const { id } = req.params;
+  const { userId } = req.body;
 
   try {
-    // 비밀번호 해싱
-    const saltRounds = parseInt(process.env.SALT_ROUNDS); // 환경 변수에서 솔트 라운드 가져오기
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // 이메일과 전화번호 암호화
-    const encryptedEmail = encrypt(email);
-    const encryptedPhone = encrypt(phone);
-
-    console.log(`암호화된 이메일 (회원가입): ${encryptedEmail}`);
-
-    // 고유 사용자 ID 생성
-    let userId;
-    let isUnique = false;
-    while (!isUnique) {
-      userId = generateRandomUserId();
-      const [checkUserId] = await db.execute('SELECT id FROM users WHERE id = ?', [userId]);
-      if (checkUserId.length === 0) {
-        isUnique = true;
-      }
+    const [result] = await db.query('SELECT * FROM items WHERE id = ?', [id]);
+    if (result.length === 0) {
+      return res.status(404).send({ message: 'Item not found' });
+    }
+    if (result[0].user_id !== parseInt(userId, 10)) {
+      return res.status(403).send({ message: 'Unauthorized' });
     }
 
-    // 중복 이메일 검사
-    const [existingUser] = await db.execute('SELECT * FROM users WHERE email = ?', [encryptedEmail]);
-    if (existingUser.length > 0) {
-      return res.status(409).send({ message: '이미 사용 중인 이메일 주소입니다.' });
-    }
+    // cart 테이블에서 해당 아이템 삭제
+    await db.query('DELETE FROM cart WHERE item_id = ?', [id]);
 
-    // 이메일 인증 토큰 생성 및 만료 시간 설정
-    const emailVerificationToken = generateEmailVerificationToken();
-    const currentTimestamp = getCurrentTimestamp();
-    const tokenExpirationTime = moment(currentTimestamp).add(3, 'hours');
-
-    // 사용자 정보 저장
-    const insertQuery = 'INSERT INTO users (id, email, password, name, phone, address, email_verification_token, token_expiration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
-    await db.execute(insertQuery, [userId, encryptedEmail, hashedPassword, name, encryptedPhone, address, emailVerificationToken, tokenExpirationTime.format('YYYY-MM-DD HH:mm:ss')]);
-
-    logAction(email, `Account registered with ID ${userId}`);
-
-    // 이메일 발송 로직 호출
-    try {
-      await sendVerificationEmail(email, emailVerificationToken, tokenExpirationTime);
-      res.status(200).send({ message: 'Verification email sent successfully' });
-    } catch (error) {
-      res.status(500).send({ message: 'Error sending verification email' });
-      logAction(email, `Error sending verification email: ${error.message}`);
-    }
+    // items 테이블에서 아이템 삭제
+    await db.query('DELETE FROM items WHERE id = ?', [id]);
+    res.status(200).send({ message: 'Item deleted successfully' });
   } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') {
-      // 중복 이메일 오류 처리
-      return res.status(409).send({ message: '이미 사용 중인 이메일 주소입니다.' });
-    }
-
-    // email 변수 존재여부 확인
-    const email = req.body.email || 'Unknown';
-    logAction(email, `Server error on registering: ${err.message}`);
+    console.error(`Failed to delete item: ${err.message}`);
     res.status(500).send({ message: 'Server error' });
   }
 });
 
+// 아이템 추가 라우트
+app.post('/items', async (req, res) => {
+  const { name, categoryId, imageUrl, description, userId, price } = req.body;
+
+  if (!name || !categoryId || !userId || !price) {
+    console.error('Missing name, categoryId, userId, or price');
+    return res.status(400).send({ message: 'Missing name, categoryId, userId, or price' });
+  }
+
+  try {
+    const insertQuery = 'INSERT INTO items (name, category_id, image_url, description, user_id, price) VALUES (?, ?, ?, ?, ?, ?)';
+    await db.query(insertQuery, [name, categoryId, imageUrl, description, userId, price]);
+    console.log(`Item added: ${name}, Category: ${categoryId}, Image: ${imageUrl}, Description: ${description}, User: ${userId}, Price: ${price}`);
+    res.status(201).send({ message: 'Item added successfully' });
+  } catch (err) {
+    console.error(`Failed to add item: ${err.message}`);
+    res.status(500).send({ message: 'Server error', error: err.message });
+  }
+});
+
+
+  // 회원가입 라우트
+  app.post('/userregister', async (req, res) => {
+    const { email, password, name, phone, address } = req.body;
+
+    // 필수 필드 유효성 검사
+    if (!email || !password || !name || !phone || !address) {
+      return res.status(400).send({ error: 'missing_fields' });
+    }
+
+    try {
+      // 비밀번호 해싱
+      const saltRounds = parseInt(process.env.SALT_ROUNDS); // 환경 변수에서 솔트 라운드 가져오기
+      const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+      // 이메일과 전화번호 암호화
+      const encryptedEmail = encrypt(email);
+      const encryptedPhone = encrypt(phone);
+
+      console.log(`암호화된 이메일 (회원가입): ${encryptedEmail}`);
+
+      // 고유 사용자 ID 생성
+      let userId;
+      let isUnique = false;
+      while (!isUnique) {
+        userId = generateRandomUserId();
+        const [checkUserId] = await db.execute('SELECT id FROM users WHERE id = ?', [userId]);
+        if (checkUserId.length === 0) {
+          isUnique = true;
+        }
+      }
+
+      // 중복 이메일 검사
+      const [existingUser] = await db.execute('SELECT * FROM users WHERE email = ?', [encryptedEmail]);
+      if (existingUser.length > 0) {
+        return res.status(409).send({ message: '이미 사용 중인 이메일 주소입니다.' });
+      }
+
+      // 이메일 인증 토큰 생성 및 만료 시간 설정
+      const emailVerificationToken = generateEmailVerificationToken();
+      const currentTimestamp = getCurrentTimestamp();
+      const tokenExpirationTime = moment(currentTimestamp).add(3, 'hours');
+
+      // 사용자 정보 저장
+      const insertQuery = 'INSERT INTO users (id, email, password, name, phone, address, email_verification_token, token_expiration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+      await db.execute(insertQuery, [
+        userId,
+        encryptedEmail,
+        hashedPassword,
+        name,
+        encryptedPhone,
+        address,
+        emailVerificationToken,
+        tokenExpirationTime.format('YYYY-MM-DD HH:mm:ss'),
+      ]);
+
+      logAction(email, `Account registered with ID ${userId}`);
+
+      // 이메일 발송 로직 호출
+      try {
+        await sendVerificationEmail(email, emailVerificationToken, tokenExpirationTime);
+        res.status(200).send({ message: 'Verification email sent successfully' });
+      } catch (error) {
+        res.status(500).send({ message: 'Error sending verification email' });
+        logAction(email, `Error sending verification email: ${error.message}`);
+      }
+    } catch (err) {
+      if (err.code === 'ER_DUP_ENTRY') {
+        // 중복 이메일 오류 처리
+        return res.status(409).send({ message: '이미 사용 중인 이메일 주소입니다.' });
+      }
+
+      // email 변수 존재여부 확인
+      const email = req.body.email || 'Unknown';
+      logAction(email, `Server error on registering: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
 
   // 카테고리 추가 라우트
   app.post('/categories', async (req, res) => {
@@ -460,6 +530,17 @@ app.post('/userregister', async (req, res) => {
       res.status(201).send({ message: 'Category added successfully' });
     } catch (err) {
       console.error(`Failed to add category: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 카테고리 목록 조회 라우트
+  app.get('/categories', async (req, res) => {
+    try {
+      const [categories] = await db.query('SELECT * FROM categories');
+      res.status(200).send(categories);
+    } catch (err) {
+      console.error(`Failed to fetch categories: ${err.message}`);
       res.status(500).send({ message: 'Server error' });
     }
   });
@@ -502,7 +583,7 @@ app.post('/userregister', async (req, res) => {
     try {
       let query = 'SELECT * FROM items WHERE 1=1';
       const queryParams = [];
-      
+
       if (searchQuery) {
         query += ' AND name LIKE ?';
         queryParams.push(`%${searchQuery}%`);
@@ -511,7 +592,7 @@ app.post('/userregister', async (req, res) => {
         query += ' AND category_id = ?';
         queryParams.push(categoryId);
       }
-      
+
       const [items] = await db.query(query, queryParams);
       res.send(items);
     } catch (err) {
@@ -562,20 +643,20 @@ app.post('/userregister', async (req, res) => {
     const encryptedEmail = encrypt(emailToCheck);
 
     try {
-        const [results] = await db.query('SELECT * FROM users WHERE email = ?', [encryptedEmail]);
+      const [results] = await db.query('SELECT * FROM users WHERE email = ?', [encryptedEmail]);
 
-        if (results.length > 0) {
-            // 중복 이메일이 이미 존재하는 경우
-            logAction(emailToCheck, 'Email already exists');
-            return res.status(409).send({ message: '이미 존재하는 메일입니다.' });
-        }
+      if (results.length > 0) {
+        // 중복 이메일이 이미 존재하는 경우
+        logAction(emailToCheck, 'Email already exists');
+        return res.status(409).send({ message: '이미 존재하는 메일입니다.' });
+      }
 
-        // 중복 이메일이 존재하지 않는 경우
-        logAction(emailToCheck, 'Email available');
-        res.status(200).send({ message: '사용 가능한 이메일입니다.' });
+      // 중복 이메일이 존재하지 않는 경우
+      logAction(emailToCheck, 'Email available');
+      res.status(200).send({ message: '사용 가능한 이메일입니다.' });
     } catch (err) {
-        logAction(emailToCheck, `Server error on searching email in database: ${err.message}`);
-        return res.status(500).send({ message: 'Server error' });
+      logAction(emailToCheck, `Server error on searching email in database: ${err.message}`);
+      return res.status(500).send({ message: 'Server error' });
     }
   });
 
@@ -587,84 +668,83 @@ app.post('/userregister', async (req, res) => {
     const encryptedPhone = encrypt(phoneToCheck);
 
     try {
-        const [results] = await db.query('SELECT * FROM users WHERE phone = ?', [encryptedPhone]);
+      const [results] = await db.query('SELECT * FROM users WHERE phone = ?', [encryptedPhone]);
 
-        if (results.length > 0) {
-            // 중복 전화번호가 이미 존재하는 경우
-            logAction(phoneToCheck, 'Phone number already exists');
-            return res.status(409).send({ message: '이미 사용 중인 전화번호입니다.' });
-        }
+      if (results.length > 0) {
+        // 중복 전화번호가 이미 존재하는 경우
+        logAction(phoneToCheck, 'Phone number already exists');
+        return res.status(409).send({ message: '이미 사용 중인 전화번호입니다.' });
+      }
 
-        // 중복 전화번호가 존재하지 않는 경우
-        logAction(phoneToCheck, 'Phone number available');
-        res.status(200).send({ message: '사용 가능한 전화번호입니다.' });
+      // 중복 전화번호가 존재하지 않는 경우
+      logAction(phoneToCheck, 'Phone number available');
+      res.status(200).send({ message: '사용 가능한 전화번호입니다.' });
     } catch (err) {
-        logAction(phoneToCheck, `Server error on searching phone in database: ${err.message}`);
-        return res.status(500).send({ message: 'Server error' });
+      logAction(phoneToCheck, `Server error on searching phone in database: ${err.message}`);
+      return res.status(500).send({ message: 'Server error' });
     }
   });
 
-
   // 로그인 라우트
-app.post('/userlogin', async (req, res) => {
-  const { email, password } = req.body;
+  app.post('/userlogin', async (req, res) => {
+    const { email, password } = req.body;
 
-  try {
-    console.log(`입력된 이메일: ${email}`);
+    try {
+      console.log(`입력된 이메일: ${email}`);
 
-    // 사용자 입력 이메일 암호화
-    const encryptedEmail = encrypt(email);
-    console.log(`암호화된 이메일: ${encryptedEmail}`);
+      // 사용자 입력 이메일 암호화
+      const encryptedEmail = encrypt(email);
+      console.log(`암호화된 이메일: ${encryptedEmail}`);
 
-    // prepared statement 사용하여 사용자 정보 조회
-    const query = 'SELECT * FROM users WHERE email = ?';
-    const [user] = await db.execute(query, [encryptedEmail]);
+      // prepared statement 사용하여 사용자 정보 조회
+      const query = 'SELECT * FROM users WHERE email = ?';
+      const [user] = await db.execute(query, [encryptedEmail]);
 
-    console.log(`조회된 사용자: ${JSON.stringify(user)}`);
+      console.log(`조회된 사용자: ${JSON.stringify(user)}`);
 
-    if (user.length === 0) {
-      return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
+      if (user.length === 0) {
+        return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
+      }
+
+      const currentUser = user[0];
+
+      // 이미 로그인 중인지 확인
+      if (currentUser.is_LogIn) {
+        return res.status(401).send({ message: '이미 다른 디바이스에서 로그인 중입니다.' });
+      }
+
+      // 비밀번호 확인
+      const passwordMatch = await bcrypt.compare(password, currentUser.password);
+      if (!passwordMatch) {
+        return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
+      }
+
+      // 이메일 인증 확인
+      if (!currentUser.email_verified) {
+        return res.status(401).send({ message: '이메일 인증이 완료되지 않았습니다.' });
+      }
+
+      // 로그인 성공
+      logAction(email, 'Login successful');
+      await db.query('UPDATE users SET is_LogIn = 1, last_activity = NOW() WHERE id = ?', [currentUser.id]);
+      res.status(200).send({ message: 'Login successful', userId: currentUser.id });
+    } catch (err) {
+      console.error(err);
+      res.status(500).send({ message: 'Server error' });
     }
+  });
 
-    const currentUser = user[0];
-
-    // 이미 로그인 중인지 확인
-    if (currentUser.is_LogIn) {
-      return res.status(401).send({ message: '이미 다른 디바이스에서 로그인 중입니다.' });
-    }
-
-    // 비밀번호 확인
-    const passwordMatch = await bcrypt.compare(password, currentUser.password);
-    if (!passwordMatch) {
-      return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
-    }
-
-    // 이메일 인증 확인
-    if (!currentUser.email_verified) {
-      return res.status(401).send({ message: '이메일 인증이 완료되지 않았습니다.' });
-    }
-
-    // 로그인 성공
-    logAction(email, 'Login successful');
-    await db.query('UPDATE users SET is_LogIn = 1, last_activity = NOW() WHERE id = ?', [currentUser.id]);
-    res.status(200).send({ message: 'Login successful', userId: currentUser.id });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ message: 'Server error' });
-  }
-});
-  
   // 로그아웃 라우트
   app.post('/userlogout', async (req, res) => {
     const { userId } = req.body;
 
     try {
-        // is_LogIn을 0으로 설정
-        await db.query('UPDATE users SET is_LogIn = 0 WHERE id = ?', [userId]);
-        res.status(200).send({ message: 'Logout successful' });
+      // is_LogIn을 0으로 설정
+      await db.query('UPDATE users SET is_LogIn = 0 WHERE id = ?', [userId]);
+      res.status(200).send({ message: 'Logout successful' });
     } catch (err) {
-        // 오류 처리
-        res.status(500).send({ message: 'Server error' });
+      // 오류 처리
+      res.status(500).send({ message: 'Server error' });
     }
   });
 
@@ -737,18 +817,18 @@ app.post('/userlogin', async (req, res) => {
   // 비밀번호 재설정용 링크 이메일 전송 라우트
   app.post('/requestPasswordReset', async (req, res) => {
     const { email, name, phone } = req.body;
-  
+
     try {
       // 사용자 정보 확인
       const [user] = await db.query('SELECT * FROM users WHERE email = ? AND name = ? AND phone = ?', [email, name, phone]);
-  
+
       if (!user || user.length === 0) {
         return res.status(404).send({ message: '사용자를 찾을 수 없습니다.' });
       }
 
       // 사용자의 ID 추출
       const userId = user[0].id;
-  
+
       // 비밀번호 재설정 토큰 생성
       const resetToken = generateResetToken();
       const expirationTime = moment().add(3, 'hours').format('YYYY-MM-DD HH:mm:ss');
@@ -765,7 +845,6 @@ app.post('/userlogin', async (req, res) => {
         logAction(email, `이메일 발송 중 오류 발생: ${error.message}`);
         res.status(500).send({ message: '이메일 발송 중 오류 발생' });
       }
-
     } catch (err) {
       // 오류 처리
       logAction(email, `비밀번호 재설정 요청 처리 오류: ${err.message}`);
@@ -776,17 +855,17 @@ app.post('/userlogin', async (req, res) => {
   // 비밀번호 재설정 토큰 조회 라우트
   app.get('/verify-reset-token', async (req, res) => {
     const { token } = req.query;
-  
+
     try {
       // 데이터베이스에서 토큰 조회
       const [rows] = await db.query('SELECT * FROM password_reset_tokens WHERE token = ?', [token]);
-  
+
       // 토큰이 존재하지 않는 경우
       if (rows.length === 0) {
         logAction('System', `Invalid token attempt: ${token}`);
         return res.status(404).send({ message: '유효하지 않은 토큰입니다.' });
       }
-  
+
       // 토큰 만료 여부 확인
       const tokenData = rows[0];
       const now = new Date();
@@ -795,7 +874,7 @@ app.post('/userlogin', async (req, res) => {
         logAction('System', `Expired token attempt: ${token}`);
         return res.status(410).send({ message: '토큰이 만료되었습니다.' });
       }
-  
+
       // 토큰이 유효한 경우, 연관된 userId 반환
       logAction('System', `Valid token verification: ${token}`);
       res.send({ userId: tokenData.user_id });
@@ -804,7 +883,6 @@ app.post('/userlogin', async (req, res) => {
       res.status(500).send({ message: '서버 오류가 발생했습니다.' });
     }
   });
-  
 
   // 비밀번호 업데이트 라우트
   app.post('/updatePassword', async (req, res) => {
@@ -823,6 +901,164 @@ app.post('/userlogin', async (req, res) => {
       return res.status(500).send({ message: 'Server error' });
     }
   });
+
+  // 장바구니에 아이템 추가
+  app.post('/cart', async (req, res) => {
+    const { userId, itemId, quantity } = req.body;
+
+    try {
+      // 중복 아이템 확인
+      const [existingCartItem] = await db.query('SELECT * FROM cart WHERE user_id = ? AND item_id = ?', [userId, itemId]);
+      if (existingCartItem.length > 0) {
+        // 중복 아이템이 존재하면 수량 업데이트
+        await db.query('UPDATE cart SET quantity = quantity + ? WHERE user_id = ? AND item_id = ?', [quantity, userId, itemId]);
+      } else {
+        // 새 아이템 추가
+        const insertQuery = 'INSERT INTO cart (user_id, item_id, quantity) VALUES (?, ?, ?)';
+        await db.query(insertQuery, [userId, itemId, quantity]);
+      }
+
+      res.status(201).send({ message: 'Item added to cart successfully' });
+    } catch (err) {
+      console.error(`Failed to add item to cart: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 장바구니 조회
+app.get('/cart/:userId', async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const [cartItems] = await db.query(
+      'SELECT c.item_id, i.name, i.image_url, SUM(c.quantity) as quantity FROM cart c JOIN items i ON c.item_id = i.id WHERE c.user_id = ? GROUP BY c.item_id, i.name, i.image_url',
+      [userId]
+    );
+    res.send(cartItems);
+  } catch (err) {
+    console.error(`Failed to fetch cart items: ${err.message}`);
+    res.status(500).send({ message: 'Server error' });
+  }
+});
+
+// 장바구니 아이템 수량 업데이트
+app.put('/cart/:userId/:itemId', async (req, res) => {
+  const { userId, itemId } = req.params;
+  const { quantity } = req.body;
+
+  if (!quantity || quantity <= 0) {
+    return res.status(400).send({ message: 'Invalid quantity' });
+  }
+
+  try {
+    await db.query('UPDATE cart SET quantity = ? WHERE user_id = ? AND item_id = ?', [quantity, userId, itemId]);
+    res.status(200).send({ message: 'Quantity updated successfully' });
+  } catch (err) {
+    console.error(`Failed to update item quantity: ${err.message}`);
+    res.status(500).send({ message: 'Server error' });
+  }
+});
+
+
+  // 장바구니 아이템 삭제
+  app.delete('/cart/:userId/:itemId', async (req, res) => {
+    const { userId, itemId } = req.params;
+
+    try {
+      await db.query('DELETE FROM cart WHERE user_id = ? AND item_id = ?', [userId, itemId]);
+      res.status(200).send({ message: 'Item removed from cart successfully' });
+    } catch (err) {
+      console.error(`Failed to remove item from cart: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+// 주문 생성
+app.post('/orders', async (req, res) => {
+  const { userId, items } = req.body;
+
+  if (!userId || !items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).send({ message: 'Missing userId or items' });
+  }
+
+  try {
+    const [itemIds] = await db.query('SELECT id, price FROM items WHERE id IN (?)', [items.map(item => item.item_id)]);
+    const itemMap = itemIds.reduce((acc, item) => {
+      acc[item.id] = item.price;
+      return acc;
+    }, {});
+
+    const totalAmount = items.reduce((sum, item) => sum + itemMap[item.item_id] * item.quantity, 0);
+
+    // 주문 생성
+    const [orderResult] = await db.query('INSERT INTO orders (user_id, total_amount) VALUES (?, ?)', [userId, totalAmount]);
+    const orderId = orderResult.insertId;
+
+    // 주문 아이템 추가
+    const orderItems = items.map(item => [orderId, item.item_id, item.quantity]);
+    await db.query('INSERT INTO order_items (order_id, item_id, quantity) VALUES ?', [orderItems]);
+
+    res.status(201).send({ message: 'Order created successfully', orderId });
+  } catch (err) {
+    console.error(`Failed to create order: ${err.message}`);
+    res.status(500).send({ message: 'Server error' });
+  }
+});
+
+
+
+  // 주문 조회
+app.get('/orders/:userId', async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const [orders] = await db.query('SELECT * FROM orders WHERE user_id = ?', [userId]);
+
+    const ordersWithItems = await Promise.all(orders.map(async order => {
+      const [orderItems] = await db.query(
+        'SELECT oi.*, i.name, i.price FROM order_items oi JOIN items i ON oi.item_id = i.id WHERE oi.order_id = ?',
+        [order.id]
+      );
+      order.items = orderItems;
+      return order;
+    }));
+
+    res.send(ordersWithItems);
+  } catch (err) {
+    console.error(`Failed to fetch orders: ${err.message}`);
+    res.status(500).send({ message: 'Server error' });
+  }
+});
+
+  // 주문 상세 조회
+  app.get('/order/:orderId', async (req, res) => {
+    const { orderId } = req.params;
+
+    try {
+      const [orderItems] = await db.query(
+        'SELECT oi.*, i.name, i.description, i.image_url FROM order_items oi JOIN items i ON oi.item_id = i.id WHERE oi.order_id = ?',
+        [orderId]
+      );
+      res.send(orderItems);
+    } catch (err) {
+      console.error(`Failed to fetch order details: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
+
+  // 주문 삭제
+app.delete('/orders/:orderId', async (req, res) => {
+  const { orderId } = req.params;
+
+  try {
+    await db.query('DELETE FROM order_items WHERE order_id = ?', [orderId]);
+    await db.query('DELETE FROM orders WHERE id = ?', [orderId]);
+    res.status(200).send({ message: 'Order deleted successfully' });
+  } catch (err) {
+    console.error(`Failed to delete order: ${err.message}`);
+    res.status(500).send({ message: 'Server error' });
+  }
+});
 
   // 사용자 정보 조회 라우트
   app.get('/userinfo/:userId', async (req, res) => {
@@ -857,16 +1093,19 @@ initializeServer();
 // 주기적으로 만료된 비인증 계정 삭제(매 10분)
 setInterval(() => {
   deleteExpiredAccounts(db)
-  .then(() => logAction('System', 'Expired accounts check completed'))
-  .catch(err => logAction('System', `Error during expired accounts check: ${err.message}`));
+    .then(() => logAction('System', 'Expired accounts check completed'))
+    .catch((err) => logAction('System', `Error during expired accounts check: ${err.message}`));
 }, 10 * 60 * 1000);
 
 // 정기적으로 사용자 로그아웃 체크(매 5분)
 setInterval(async () => {
   const TIMEOUT = 30 * 60 * 1000; // 30분 타이머
-  await db.query(`
+  await db.query(
+    `
     UPDATE users 
     SET is_LogIn = 0
     WHERE is_LogIn = 1 AND last_activity < NOW() - INTERVAL ? SECOND
-  `, [TIMEOUT / 1000]);
+  `,
+    [TIMEOUT / 1000]
+  );
 }, 5 * 60 * 1000);

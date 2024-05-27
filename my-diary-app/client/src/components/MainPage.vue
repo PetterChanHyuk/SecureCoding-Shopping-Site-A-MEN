@@ -2,31 +2,28 @@
   <div id="app">
     <header>
       <h1 @click="refreshPage">108번가</h1>
-      <div class="timer">자동 로그아웃: {{ remainingTime }}초</div>
       <div class="user-info">
-        {{ userName }}님 | 
+        {{ userName }}님 |
         <router-link to="/mypage">마이페이지</router-link> |
+        <router-link to="/cart">장바구니</router-link> |
+        <router-link to="/orders">주문 목록</router-link> |
         <a href="#" @click="logout">로그아웃</a>
       </div>
+      <div class="timer">자동 로그아웃: {{ remainingTime }}초</div>
     </header>
+    <nav class="category-menu">
+      <button :class="{'active': selectedCategory === null}" @click="filterByCategory(null)">
+        전체
+      </button>
+      <button v-for="category in categories" :key="category.id" @click="filterByCategory(category)"
+        :class="{'active': selectedCategory === category}">
+        {{ category.name }}
+      </button>
+    </nav>
     <main>
-      <div>
+      <div class="search-bar">
         <input type="text" v-model="searchQuery" placeholder="Search for items..." />
         <button @click="search">검색</button>
-      </div>
-      <div class="category-container">
-        <button 
-          :class="{'active': selectedCategory === null}" 
-          @click="filterByCategory(null)">
-          전체
-        </button>
-        <button 
-          v-for="category in categories" 
-          :key="category.id" 
-          @click="filterByCategory(category)"
-          :class="{'active': selectedCategory === category}">
-          {{ category.name }}
-        </button>
       </div>
       <div class="item-container">
         <div v-for="item in filteredItems" :key="item.id" class="item">
@@ -34,6 +31,10 @@
           <div class="item-details">
             <h3>{{ item.name }}</h3>
             <p>{{ item.description }}</p>
+            <div class="item-actions">
+              <button @click="addToCart(item.id)">장바구니에 추가</button>
+              <button @click="buyNow(item.id)">바로 구매</button>
+            </div>
           </div>
         </div>
       </div>
@@ -68,6 +69,19 @@ export default {
     }
   },
   methods: {
+    escapeHtml(text) {
+      return text.replace(/[&<>"'`=]/g, function (s) {
+        return {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+          '`': '&#x60;',
+          '=': '&#x3D;'
+        }[s];
+      });
+    },
     getImageUrl(imageUrl) {
       return `${process.env.VUE_APP_BACKEND_URL}/${imageUrl}`;
     },
@@ -77,20 +91,15 @@ export default {
         alert('Invalid search query. Please enter alphanumeric characters only.');
         return;
       }
-
       this.filteredQuery = validatedQuery;
       this.fetchItems();
     },
     validateSearchQuery(query) {
-      const regex = /^[a-zA-Z0-9 ]*$/;
+      const regex = /^[a-zA-Z가-힣0-9 ]*$/;
       if (!regex.test(query)) {
         return false;
       }
-      // SQL 인젝션을 방지하기 위해 입력 값에 대해 이스케이핑 수행
-      const escapedQuery = query.replace(/'/g, "''");
-
-      // 이스케이핑된 검색어 반환
-      return escapedQuery;
+      return this.escapeHtml(query);
     },
     refreshPage() {
       window.location.reload();
@@ -130,7 +139,7 @@ export default {
           }
       })
       .then(response => {
-          this.userName = response.data.name;
+          this.userName = this.escapeHtml(response.data.name);
       })
       .catch(error => {
           console.error('Error fetching user name:', error);
@@ -139,7 +148,10 @@ export default {
     fetchCategories() {
       axios.get(`${process.env.VUE_APP_BACKEND_URL}/categories`)
         .then(response => {
-          this.categories = response.data;
+          this.categories = response.data.map(category => ({
+            ...category,
+            name: this.escapeHtml(category.name)
+          }));
         })
         .catch(error => {
           console.error('Error fetching categories:', error);
@@ -147,15 +159,51 @@ export default {
     },
     fetchItems() {
       const params = {
-        searchQuery: this.searchQuery,
+        searchQuery: this.filteredQuery,
         categoryId: this.selectedCategory ? this.selectedCategory.id : null
       };
       axios.get(`${process.env.VUE_APP_BACKEND_URL}/items`, { params })
         .then(response => {
-          this.items = response.data;
+          this.items = response.data.map(item => ({
+            ...item,
+            name: this.escapeHtml(item.name),
+            description: this.escapeHtml(item.description)
+          }));
         })
         .catch(error => {
           console.error('Error fetching items:', error);
+        });
+    },
+    addToCart(itemId) {
+      const userId = localStorage.getItem('userId');
+      if (!userId) {
+        alert('로그인이 필요합니다.');
+        this.$router.push('/userlogin');
+        return;
+      }
+      axios.post(`${process.env.VUE_APP_BACKEND_URL}/cart`, { userId, itemId, quantity: 1 })
+        .then(() => {
+          alert('장바구니에 추가되었습니다.');
+        })
+        .catch(error => {
+          console.error('Failed to add item to cart:', error);
+          alert('장바구니 추가에 실패했습니다.');
+        });
+    },
+    buyNow(itemId) {
+      const userId = localStorage.getItem('userId');
+      if (!userId) {
+        alert('로그인이 필요합니다.');
+        this.$router.push('/userlogin');
+        return;
+      }
+      axios.post(`${process.env.VUE_APP_BACKEND_URL}/orders`, { userId, items: [{ item_id: itemId, quantity: 1 }] })
+        .then(() => {
+          alert('구매가 완료되었습니다.');
+        })
+        .catch(error => {
+          console.error('Failed to complete purchase:', error);
+          alert('구매에 실패했습니다.');
         });
     }
   },
@@ -189,41 +237,85 @@ body {
   font-family: Arial, sans-serif;
   margin: 0;
   padding: 0;
+  background-color: #f2f2f2;
 }
 #app {
   text-align: center;
 }
 header {
-  background-color: #f8f9fa;
+  background-color: #ffffff;
   padding: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border-bottom: 1px solid #ddd;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
-h1 {
+header h1 {
   margin: 0;
   cursor: pointer;
+  font-size: 24px;
+  color: #333;
+}
+.user-info {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #333;
+}
+.user-info a, .user-info span {
+  margin: 0 10px;
+  text-decoration: none;
+  color: #333;
+}
+.timer {
+  margin-left: 20px;
+  font-size: 14px;
+  color: #777;
+}
+nav.category-menu {
+  background-color: #fff;
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  justify-content: center;
+}
+nav.category-menu button {
+  background-color: transparent;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.3s, color 0.3s;
+}
+nav.category-menu button.active, nav.category-menu button:hover {
+  background-color: #007bff;
+  color: white;
 }
 main {
   padding: 20px;
 }
-input {
+.search-bar {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+.search-bar input {
   padding: 10px;
   font-size: 16px;
-  margin-right: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px 0 0 4px;
 }
-button {
-  padding: 10px 20px;
+.search-bar button {
+  padding: 10px;
   font-size: 16px;
-  cursor: pointer;
-  margin: 5px;
-}
-button.active {
+  border: 1px solid #007bff;
+  border-left: none;
   background-color: #007bff;
   color: white;
-}
-.category-container {
-  margin: 20px 0;
+  cursor: pointer;
+  border-radius: 0 4px 4px 0;
 }
 .item-container {
   display: flex;
@@ -231,22 +323,53 @@ button.active {
   justify-content: center;
 }
 .item {
-  background-color: #e9ecef;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
   margin: 10px;
-  padding: 10px;
-  font-size: 18px;
-  width: calc(25% - 20px);
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  padding: 20px;
+  width: calc(25% - 40px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  transition: transform 0.3s, box-shadow 0.3s;
 }
-.item-image {
-  width: 100px;
-  height: 100px;
+.item:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+}
+.item img.item-image {
+  width: 100%;
+  height: 150px;
   object-fit: cover;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 10px;
 }
-.item-details {
+.item .item-details {
   text-align: left;
+}
+.item .item-details h3 {
+  font-size: 18px;
+  margin: 10px 0;
+  color: #333;
+}
+.item .item-details p {
+  font-size: 14px;
+  color: #777;
+}
+.item .item-actions {
+  display: flex;
+  justify-content: space-between;
+}
+.item .item-actions button {
+  padding: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+  background-color: #007bff;
+  color: white;
+  border-radius: 4px;
+  transition: background-color 0.3s;
+}
+.item .item-actions button:hover {
+  background-color: #0056b3;
 }
 </style>
