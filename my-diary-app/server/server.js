@@ -11,6 +11,7 @@ const path = require('path');
 const fs = require('fs');
 const moment = require('moment-timezone');
 const helmet = require('helmet');
+const rateLimit = require('express-rate-limit'); // rate-limit 모듈 불러오기
 
 // 암호화 키
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
@@ -342,6 +343,17 @@ async function initializeServer() {
     res.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self'; script-src 'self'; style-src 'self';");
     next();
   });
+
+  // rate limiting 미들웨어 설정
+  const limiter = rateLimit({
+    windowMs: 10 * 60 * 1000, // 10분
+    max: 150, // 10분 동안 최대 150회 요청 허용
+    message: '10분 동안 최대 150회 요청이 허용됩니다. 잠시 후 다시 시도해주세요.',
+    headers: true,
+  });
+
+  // 모든 요청에 rate limiting 미들웨어 적용
+  app.use(limiter);
 
   const escapeHtml = (unsafe) => {
     return unsafe
