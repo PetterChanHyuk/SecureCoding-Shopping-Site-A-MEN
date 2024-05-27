@@ -22,6 +22,11 @@
         <p v-if="newCategoryError" class="error-message">{{ newCategoryError }}</p>
       </div>
 
+      <div class="form-group">
+        <label for="price">Price</label>
+        <input type="number" id="price" v-model="price" required />
+      </div>
+
       <label for="itemDescription">Item Description</label>
       <div class="form-group">
         <textarea id="itemDescription" v-model="itemDescription"></textarea>
@@ -48,6 +53,7 @@ export default {
       newCategory: '',
       itemDescription: '',
       file: null,
+      price: 0, // price 필드 추가
       categories: [],
       itemNameError: '',
       newCategoryError: ''
@@ -114,7 +120,7 @@ export default {
     async addItem() {
       const userId = localStorage.getItem('userId'); // 사용자 ID 가져오기
 
-      if (!this.itemName || !this.selectedCategoryId || !userId || this.itemNameError) {
+      if (!this.itemName || !this.selectedCategoryId || !userId || this.itemNameError || !this.price) {
         alert('모든 필수 항목을 올바르게 입력해 주세요.');
         return;
       }
@@ -144,7 +150,8 @@ export default {
           categoryId: this.selectedCategoryId,
           imageUrl,
           description: this.itemDescription,
-          userId // 사용자 ID 추가
+          userId, // 사용자 ID 추가
+          price: this.price // price 추가
         });
         console.log('아이템 추가에 성공했습니다:', response.data);
         this.$router.push('/mainpage');
