@@ -10,6 +10,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const moment = require('moment-timezone');
+const helmet = require('helmet');
 
 // 암호화 키
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
@@ -336,6 +337,21 @@ async function initializeServer() {
   app.use(bodyParser.json());
   app.use('/uploads', express.static(uploadDir));
 
+  app.use(helmet());
+  app.use((req, res, next) => {
+    res.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self'; script-src 'self'; style-src 'self';");
+    next();
+  });
+
+  const escapeHtml = (unsafe) => {
+    return unsafe
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
+
   // 파일 업로드 라우트
   app.post('/upload', upload.single('file'), async (req, res) => {
     try {
@@ -578,28 +594,37 @@ app.post('/items', async (req, res) => {
   });
 
   // 아이템 목록 조회 라우트
-  app.get('/items', async (req, res) => {
-    const { searchQuery, categoryId } = req.query;
-    try {
-      let query = 'SELECT * FROM items WHERE 1=1';
-      const queryParams = [];
+app.get('/items', async (req, res) => {
+  const { searchQuery, categoryId } = req.query;
 
-      if (searchQuery) {
-        query += ' AND name LIKE ?';
-        queryParams.push(`%${searchQuery}%`);
-      }
-      if (categoryId) {
-        query += ' AND category_id = ?';
-        queryParams.push(categoryId);
-      }
+  // 입력값 검증
+  const validatedSearchQuery = searchQuery ? searchQuery.trim().replace(/[^a-zA-Z가-힣0-9 ]/g, '') : '';
+  const validatedCategoryId = categoryId && Number.isInteger(parseInt(categoryId)) ? categoryId : null;
 
-      const [items] = await db.query(query, queryParams);
-      res.send(items);
-    } catch (err) {
-      logAction('System', `Failed to fetch items: ${err.message}`);
-      res.status(500).send({ message: 'Server error' });
+  try {
+    let query = 'SELECT * FROM items WHERE 1=1';
+    const queryParams = [];
+
+    if (validatedSearchQuery) {
+      query += ' AND name LIKE ?';
+      queryParams.push(`%${validatedSearchQuery}%`);
     }
-  });
+    if (validatedCategoryId) {
+      query += ' AND category_id = ?';
+      queryParams.push(validatedCategoryId);
+    }
+
+    const [items] = await db.execute(query, queryParams);
+    res.send(items.map(item => ({
+      ...item,
+      name: escapeHtml(item.name),
+      description: escapeHtml(item.description)
+    })));
+  } catch (err) {
+    logAction('System', `Failed to fetch items: ${err.message}`);
+    res.status(500).send({ message: 'Server error' });
+  }
+});
 
   // 이메일 인증 라우트
   app.get('/verify-email', async (req, res) => {
