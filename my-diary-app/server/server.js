@@ -11,7 +11,11 @@ const path = require('path');
 const fs = require('fs');
 const moment = require('moment-timezone');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit'); // rate-limit 모듈 불러오기
+const rateLimit = require('express-rate-limit'); 
+const cookieParser = require('cookie-parser');
+const session = require('express-session');
+
+const app = express();
 
 // 암호화 키
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
@@ -328,7 +332,6 @@ async function initializeServer() {
   const upload = multer({ storage: storage });
 
   // Express 앱 설정
-  const app = express();
   app.use(
     cors({
       origin: `${process.env.VUE_APP_FRONTEND_URL}`,
@@ -337,6 +340,19 @@ async function initializeServer() {
   );
   app.use(bodyParser.json());
   app.use('/uploads', express.static(uploadDir));
+  app.use(cookieParser());
+
+  // Express 세션 설정
+  app.use(session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: true,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // 프로덕션 환경에서만 secure 설정
+      maxAge: 1000 * 60 * 30 // 30분
+    }
+  }));
 
   app.use(helmet());
   app.use((req, res, next) => {
@@ -464,7 +480,6 @@ app.post('/items', async (req, res) => {
     res.status(500).send({ message: 'Server error', error: err.message });
   }
 });
-
 
   // 회원가입 라우트
   app.post('/userregister', async (req, res) => {
@@ -764,6 +779,10 @@ app.get('/items', async (req, res) => {
       // 로그인 성공
       logAction(email, 'Login successful');
       await db.query('UPDATE users SET is_LogIn = 1, last_activity = NOW() WHERE id = ?', [currentUser.id]);
+
+      // 세션에 사용자 ID 저장
+      req.session.userId = currentUser.id;
+
       res.status(200).send({ message: 'Login successful', userId: currentUser.id });
     } catch (err) {
       console.error(err);
@@ -778,7 +797,15 @@ app.get('/items', async (req, res) => {
     try {
       // is_LogIn을 0으로 설정
       await db.query('UPDATE users SET is_LogIn = 0 WHERE id = ?', [userId]);
-      res.status(200).send({ message: 'Logout successful' });
+
+      // 세션 파기
+      req.session.destroy((err) => {
+        if (err) {
+          return res.status(500).send({ message: 'Logout failed' });
+        }
+        res.clearCookie('connect.sid');
+        res.status(200).send({ message: 'Logout successful' });
+      });
     } catch (err) {
       // 오류 처리
       res.status(500).send({ message: 'Server error' });
@@ -787,7 +814,7 @@ app.get('/items', async (req, res) => {
 
   // 사용자 이름 조회 라우트
   app.get('/username', async (req, res) => {
-    const userId = req.query.userId;
+    const userId = req.session.userId;
     logAction(userId, `Username request received: ${userId}`);
     if (!userId) {
       logAction(userId, `Username request error: No user ID provided`);
@@ -1045,8 +1072,6 @@ app.post('/orders', async (req, res) => {
     res.status(500).send({ message: 'Server error' });
   }
 });
-
-
 
   // 주문 조회
 app.get('/orders/:userId', async (req, res) => {
