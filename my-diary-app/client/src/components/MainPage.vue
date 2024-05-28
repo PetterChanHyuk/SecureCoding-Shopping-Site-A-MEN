@@ -43,7 +43,7 @@
 </template>
 
 <script>
-import axios from 'axios';
+import api, { getUsername } from '../api';
 
 export default {
   name: 'MainPage',
@@ -122,7 +122,7 @@ export default {
       clearInterval(this.timer);
       const userId = localStorage.getItem('userId');
       if (userId) {
-        axios.post(`${process.env.VUE_APP_BACKEND_URL}/userlogout`, { userId })
+        api.post('/userlogout', { userId })
           .then(() => {
             localStorage.removeItem('userId');
             this.$router.push('/userlogin');
@@ -133,20 +133,16 @@ export default {
       }
     },
     fetchUserName() {
-      axios.get(`${process.env.VUE_APP_BACKEND_URL}/username`, {
-          params: {
-          userId: localStorage.getItem('userId')
-          }
-      })
-      .then(response => {
-          this.userName = this.escapeHtml(response.data.name);
-      })
-      .catch(error => {
+      getUsername()
+        .then(data => {
+          this.userName = this.escapeHtml(data.name);
+        })
+        .catch(error => {
           console.error('Error fetching user name:', error);
-      });
+        });
     },
     fetchCategories() {
-      axios.get(`${process.env.VUE_APP_BACKEND_URL}/categories`)
+      api.get('/categories')
         .then(response => {
           this.categories = response.data.map(category => ({
             ...category,
@@ -162,7 +158,7 @@ export default {
         searchQuery: this.filteredQuery,
         categoryId: this.selectedCategory ? this.selectedCategory.id : null
       };
-      axios.get(`${process.env.VUE_APP_BACKEND_URL}/items`, { params })
+      api.get('/items', { params })
         .then(response => {
           this.items = response.data.map(item => ({
             ...item,
@@ -181,7 +177,7 @@ export default {
         this.$router.push('/userlogin');
         return;
       }
-      axios.post(`${process.env.VUE_APP_BACKEND_URL}/cart`, { userId, itemId, quantity: 1 })
+      api.post('/cart', { userId, itemId, quantity: 1 })
         .then(() => {
           alert('장바구니에 추가되었습니다.');
         })
@@ -197,7 +193,7 @@ export default {
         this.$router.push('/userlogin');
         return;
       }
-      axios.post(`${process.env.VUE_APP_BACKEND_URL}/orders`, { userId, items: [{ item_id: itemId, quantity: 1 }] })
+      api.post('/orders', { userId, items: [{ item_id: itemId, quantity: 1 }] })
         .then(() => {
           alert('구매가 완료되었습니다.');
         })
