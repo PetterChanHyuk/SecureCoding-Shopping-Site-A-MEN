@@ -748,6 +748,20 @@ async function initializeServer() {
     }
   });
 
+  // 사용자 아이템 목록 조회 라우트
+app.get('/user-items/:userId', async (req, res) => {
+  const userId = req.params.userId;
+  console.log('사용자 아이템 조회 요청:', userId);
+
+  try {
+    const [items] = await db.query('SELECT * FROM items WHERE user_id = ?', [userId]);
+    res.status(200).send(items);
+  } catch (err) {
+    logAction(userId, `Failed to fetch items: ${err.message}`);
+    res.status(500).send({ message: 'Server error' });
+  }
+});
+
   // 로그인 라우트
   app.post('/userlogin', async (req, res) => {
     const { email, password } = req.body;
@@ -854,7 +868,32 @@ async function initializeServer() {
       logAction(userId, `Username request error: ${err.message}`);
       return res.status(500).send({ message: 'Server error' });
     }
-  });  
+  });
+
+  // 사용자 이름 조회 라우트
+app.get('/username/:userId', async (req, res) => {
+  const userId = req.params.userId; // URL에서 사용자 ID를 가져옵니다.
+  console.log('URL에서 가져온 userId:', userId); // 로그 추가
+  logAction(userId, `Username request received: ${userId}`);
+  if (!userId) {
+    logAction(userId, `Username request error: No user ID provided`);
+    return res.status(400).send({ message: 'No user ID provided' });
+  }
+
+  try {
+    const [results] = await db.query('SELECT name FROM users WHERE id = ?', [userId]);
+
+    if (results.length === 0) {
+      logAction(userId, `Username request error: User not found`);
+      return res.status(404).send({ message: 'User not found' });
+    }
+
+    res.send({ name: results[0].name });
+  } catch (err) {
+    logAction(userId, `Username request error: ${err.message}`);
+    return res.status(500).send({ message: 'Server error' });
+  }
+});
 
   // 계정 찾기 라우트
   app.post('/findAccount', async (req, res) => {

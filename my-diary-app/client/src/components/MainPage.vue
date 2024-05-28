@@ -43,7 +43,7 @@
 </template>
 
 <script>
-import api, { getUsername } from '../api';
+import api from '../api';
 
 export default {
   name: 'MainPage',
@@ -133,13 +133,18 @@ export default {
       }
     },
     fetchUserName() {
-      getUsername()
-        .then(data => {
-          this.userName = this.escapeHtml(data.name);
-        })
-        .catch(error => {
-          console.error('Error fetching user name:', error);
-        });
+      const userId = localStorage.getItem('userId');
+      if (userId) {
+        api.get(`/username/${userId}`)
+          .then(response => {
+            this.userName = this.escapeHtml(response.data.name);
+          })
+          .catch(error => {
+            console.error('Error fetching user name:', error);
+          });
+      } else {
+        console.error('No user ID found in local storage.');
+      }
     },
     fetchCategories() {
       api.get('/categories')
