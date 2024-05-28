@@ -8,7 +8,7 @@
     <div class="section" @click="showUserInfo">
       내 정보 조회
     </div>
-    <div class="section" @click="ResetPassword">
+    <div class="section" @click="resetPassword">
       비밀번호 재설정
     </div>
     <div class="section">
@@ -37,7 +37,7 @@
 </template>
 
 <script>
-import axios from 'axios';
+import api from '../api';
 
 export default {
   data() {
@@ -49,13 +49,26 @@ export default {
     };
   },
   methods: {
+    escapeHtml(text) {
+      return text.replace(/[&<>"'`=]/g, function (s) {
+        return {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+          '`': '&#x60;',
+          '=': '&#x3D;'
+        }[s];
+      });
+    },
     showUserInfo() {
       const userId = localStorage.getItem('userId');
       if (!userId) {
         alert("사용자 정보를 불러올 수 없습니다.");
         return;
       }
-      axios.get(`${process.env.VUE_APP_BACKEND_URL}/userinfo/${userId}`)
+      api.get(`/userinfo/${userId}`)
         .then(response => {
           const userInfo = response.data;
           alert(`귀하의 정보입니다.\n이메일: ${userInfo.email}\n이름: ${userInfo.name}\n전화번호: ${userInfo.phone}`);
@@ -65,7 +78,7 @@ export default {
           alert('사용자 정보를 불러오는데 실패했습니다.');
         });
     },
-    ResetPassword() {
+    resetPassword() {
       const userId = localStorage.getItem('userId');
       if (!userId) {
         alert("사용자 ID를 불러올 수 없습니다.");
@@ -74,33 +87,36 @@ export default {
       this.$router.push({ path: '/reset-password', query: { userId } });
     },
     fetchUserName() {
-      axios.get(`${process.env.VUE_APP_BACKEND_URL}/username`, {
-        params: {
-          userId: localStorage.getItem('userId')
-        }
-      })
-      .then(response => {
-        this.userName = response.data.name;
-      })
-      .catch(error => {
-        console.error('Error fetching user name:', error);
-      });
+      const userId = localStorage.getItem('userId');
+      if (userId) {
+        api.get(`/username/${userId}`)
+          .then(response => {
+            this.userName = this.escapeHtml(response.data.name);
+          })
+          .catch(error => {
+            console.error('Error fetching user name:', error);
+          });
+      } else {
+        console.error('No user ID found in local storage.');
+      }
     },
     fetchItems() {
       const userId = localStorage.getItem('userId');
-      axios.get(`${process.env.VUE_APP_BACKEND_URL}/items`, {
-        params: { userId }
-      })
-      .then(response => {
-        this.items = response.data;
-      })
-      .catch(error => {
-        console.error('Failed to fetch items:', error);
-      });
+      api.get(`/user-items/${userId}`)
+        .then(response => {
+          this.items = response.data.map(item => ({
+            ...item,
+            name: this.escapeHtml(item.name),
+            description: this.escapeHtml(item.description)
+          }));
+        })
+        .catch(error => {
+          console.error('Failed to fetch items:', error);
+        });
     },
     deleteItem(itemId) {
       const userId = localStorage.getItem('userId');
-      axios.delete(`${process.env.VUE_APP_BACKEND_URL}/items/${itemId}`, { data: { userId } })
+      api.delete(`/items/${itemId}`, { data: { userId } })
         .then(() => {
           this.items = this.items.filter(item => item.id !== itemId);
           alert('아이템이 성공적으로 삭제되었습니다.');
@@ -124,7 +140,7 @@ export default {
       clearInterval(this.timer);
       const userId = localStorage.getItem('userId');
       if (userId) {
-        axios.post(`${process.env.VUE_APP_BACKEND_URL}/userlogout`, { userId })
+        api.post('/userlogout', { userId })
           .then(() => {
             localStorage.removeItem('userId');
             this.$router.push('/userlogin');

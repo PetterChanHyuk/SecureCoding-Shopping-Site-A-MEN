@@ -18,7 +18,7 @@
 </template>
 
 <script>
-import axios from 'axios';
+import api from '../api';
 import router from '../router'; // 라우터 인스턴스
 
 export default {
@@ -65,7 +65,7 @@ export default {
         password: this.escapeHtml(this.password)
       };
 
-      axios.post(`${process.env.VUE_APP_BACKEND_URL}/userlogin`, userData)
+      api.post('/userlogin', userData)
         .then(response => {
           // 로그인 성공
           alert("108번가에 오신 것을 환영합니다.");

@@ -11,7 +11,12 @@ const path = require('path');
 const fs = require('fs');
 const moment = require('moment-timezone');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit'); // rate-limit 모듈 불러오기
+const rateLimit = require('express-rate-limit'); 
+const cookieParser = require('cookie-parser');
+const session = require('express-session');
+const MySQLStore = require('express-mysql-session')(session);
+
+const app = express();
 
 // 암호화 키
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
@@ -157,14 +162,13 @@ async function initializeServer() {
       host: process.env.DB_HOST,
       user: process.env.DB_USER,
       password: process.env.DB_PASS,
+      database: 'mallDB'
     };
 
     // MySQL 데이터베이스 연결
     db = await mysql.createConnection(dbConfig);
     logAction('System', 'MySQL successfully connected!');
 
-    // mallDB 데이터베이스 생성
-    const [dbCreateResult] = await db.query('CREATE DATABASE IF NOT EXISTS mallDB');
     // mallDB 데이터베이스 존재 여부 확인
     const [dbs] = await db.query("SHOW DATABASES LIKE 'mallDB'");
     if (dbs.length === 0) {
@@ -177,6 +181,31 @@ async function initializeServer() {
 
     // mallDB 데이터베이스 연결
     await db.changeUser({ database: 'mallDB' });
+
+    // 세션 스토어 설정
+    const sessionStoreOptions = {
+      host: process.env.DB_HOST,
+      port: 3306,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASS,
+      database: 'mallDB',
+    };
+
+    const sessionStore = new MySQLStore(sessionStoreOptions);
+
+    // Express 세션 설정
+    app.use(session({
+      secret: process.env.SESSION_SECRET,
+      resave: false,
+      saveUninitialized: false,
+      store: sessionStore,
+      cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // 프로덕션 환경에서만 secure 설정
+        sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax', // sameSite 설정
+        maxAge: 1000 * 60 * 30 // 30분
+      }
+    }));  
 
     // users 테이블 존재 여부 확인 및 생성
     const [usersTables] = await db.query("SHOW TABLES LIKE 'users'");
@@ -328,16 +357,14 @@ async function initializeServer() {
   const upload = multer({ storage: storage });
 
   // Express 앱 설정
-  const app = express();
-  app.use(
-    cors({
-      origin: `${process.env.VUE_APP_FRONTEND_URL}`,
-      credentials: true,
-    })
-  );
+  const corsOptions = {
+    origin: `${process.env.VUE_APP_FRONTEND_URL}`,
+    credentials: true,
+  };
+  app.use(cors(corsOptions));
   app.use(bodyParser.json());
   app.use('/uploads', express.static(uploadDir));
-
+  app.use(cookieParser());
   app.use(helmet());
   app.use((req, res, next) => {
     res.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self'; script-src 'self'; style-src 'self';");
@@ -420,51 +447,50 @@ async function initializeServer() {
   });
 
   // 아이템 삭제 라우트
-app.delete('/items/:id', async (req, res) => {
-  const { id } = req.params;
-  const { userId } = req.body;
+  app.delete('/items/:id', async (req, res) => {
+    const { id } = req.params;
+    const { userId } = req.body;
 
-  try {
-    const [result] = await db.query('SELECT * FROM items WHERE id = ?', [id]);
-    if (result.length === 0) {
-      return res.status(404).send({ message: 'Item not found' });
+    try {
+      const [result] = await db.query('SELECT * FROM items WHERE id = ?', [id]);
+      if (result.length === 0) {
+        return res.status(404).send({ message: 'Item not found' });
+      }
+      if (result[0].user_id !== parseInt(userId, 10)) {
+        return res.status(403).send({ message: 'Unauthorized' });
+      }
+
+      // cart 테이블에서 해당 아이템 삭제
+      await db.query('DELETE FROM cart WHERE item_id = ?', [id]);
+
+      // items 테이블에서 아이템 삭제
+      await db.query('DELETE FROM items WHERE id = ?', [id]);
+      res.status(200).send({ message: 'Item deleted successfully' });
+    } catch (err) {
+      console.error(`Failed to delete item: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
     }
-    if (result[0].user_id !== parseInt(userId, 10)) {
-      return res.status(403).send({ message: 'Unauthorized' });
+  });
+
+  // 아이템 추가 라우트
+  app.post('/items', async (req, res) => {
+    const { name, categoryId, imageUrl, description, userId, price } = req.body;
+
+    if (!name || !categoryId || !userId || !price) {
+      console.error('Missing name, categoryId, userId, or price');
+      return res.status(400).send({ message: 'Missing name, categoryId, userId, or price' });
     }
 
-    // cart 테이블에서 해당 아이템 삭제
-    await db.query('DELETE FROM cart WHERE item_id = ?', [id]);
-
-    // items 테이블에서 아이템 삭제
-    await db.query('DELETE FROM items WHERE id = ?', [id]);
-    res.status(200).send({ message: 'Item deleted successfully' });
-  } catch (err) {
-    console.error(`Failed to delete item: ${err.message}`);
-    res.status(500).send({ message: 'Server error' });
-  }
-});
-
-// 아이템 추가 라우트
-app.post('/items', async (req, res) => {
-  const { name, categoryId, imageUrl, description, userId, price } = req.body;
-
-  if (!name || !categoryId || !userId || !price) {
-    console.error('Missing name, categoryId, userId, or price');
-    return res.status(400).send({ message: 'Missing name, categoryId, userId, or price' });
-  }
-
-  try {
-    const insertQuery = 'INSERT INTO items (name, category_id, image_url, description, user_id, price) VALUES (?, ?, ?, ?, ?, ?)';
-    await db.query(insertQuery, [name, categoryId, imageUrl, description, userId, price]);
-    console.log(`Item added: ${name}, Category: ${categoryId}, Image: ${imageUrl}, Description: ${description}, User: ${userId}, Price: ${price}`);
-    res.status(201).send({ message: 'Item added successfully' });
-  } catch (err) {
-    console.error(`Failed to add item: ${err.message}`);
-    res.status(500).send({ message: 'Server error', error: err.message });
-  }
-});
-
+    try {
+      const insertQuery = 'INSERT INTO items (name, category_id, image_url, description, user_id, price) VALUES (?, ?, ?, ?, ?, ?)';
+      await db.query(insertQuery, [name, categoryId, imageUrl, description, userId, price]);
+      console.log(`Item added: ${name}, Category: ${categoryId}, Image: ${imageUrl}, Description: ${description}, User: ${userId}, Price: ${price}`);
+      res.status(201).send({ message: 'Item added successfully' });
+    } catch (err) {
+      console.error(`Failed to add item: ${err.message}`);
+      res.status(500).send({ message: 'Server error', error: err.message });
+    }
+  });
 
   // 회원가입 라우트
   app.post('/userregister', async (req, res) => {
@@ -606,37 +632,37 @@ app.post('/items', async (req, res) => {
   });
 
   // 아이템 목록 조회 라우트
-app.get('/items', async (req, res) => {
-  const { searchQuery, categoryId } = req.query;
+  app.get('/items', async (req, res) => {
+    const { searchQuery, categoryId } = req.query;
 
-  // 입력값 검증
-  const validatedSearchQuery = searchQuery ? searchQuery.trim().replace(/[^a-zA-Z가-힣0-9 ]/g, '') : '';
-  const validatedCategoryId = categoryId && Number.isInteger(parseInt(categoryId)) ? categoryId : null;
+    // 입력값 검증
+    const validatedSearchQuery = searchQuery ? searchQuery.trim().replace(/[^a-zA-Z가-힣0-9 ]/g, '') : '';
+    const validatedCategoryId = categoryId && Number.isInteger(parseInt(categoryId)) ? categoryId : null;
 
-  try {
-    let query = 'SELECT * FROM items WHERE 1=1';
-    const queryParams = [];
+    try {
+      let query = 'SELECT * FROM items WHERE 1=1';
+      const queryParams = [];
 
-    if (validatedSearchQuery) {
-      query += ' AND name LIKE ?';
-      queryParams.push(`%${validatedSearchQuery}%`);
+      if (validatedSearchQuery) {
+        query += ' AND name LIKE ?';
+        queryParams.push(`%${validatedSearchQuery}%`);
+      }
+      if (validatedCategoryId) {
+        query += ' AND category_id = ?';
+        queryParams.push(validatedCategoryId);
+      }
+
+      const [items] = await db.execute(query, queryParams);
+      res.send(items.map(item => ({
+        ...item,
+        name: escapeHtml(item.name),
+        description: escapeHtml(item.description)
+      })));
+    } catch (err) {
+      logAction('System', `Failed to fetch items: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
     }
-    if (validatedCategoryId) {
-      query += ' AND category_id = ?';
-      queryParams.push(validatedCategoryId);
-    }
-
-    const [items] = await db.execute(query, queryParams);
-    res.send(items.map(item => ({
-      ...item,
-      name: escapeHtml(item.name),
-      description: escapeHtml(item.description)
-    })));
-  } catch (err) {
-    logAction('System', `Failed to fetch items: ${err.message}`);
-    res.status(500).send({ message: 'Server error' });
-  }
-});
+  });
 
   // 이메일 인증 라우트
   app.get('/verify-email', async (req, res) => {
@@ -722,54 +748,80 @@ app.get('/items', async (req, res) => {
     }
   });
 
+  // 사용자 아이템 목록 조회 라우트
+app.get('/user-items/:userId', async (req, res) => {
+  const userId = req.params.userId;
+  console.log('사용자 아이템 조회 요청:', userId);
+
+  try {
+    const [items] = await db.query('SELECT * FROM items WHERE user_id = ?', [userId]);
+    res.status(200).send(items);
+  } catch (err) {
+    logAction(userId, `Failed to fetch items: ${err.message}`);
+    res.status(500).send({ message: 'Server error' });
+  }
+});
+
   // 로그인 라우트
   app.post('/userlogin', async (req, res) => {
     const { email, password } = req.body;
-
+  
     try {
       console.log(`입력된 이메일: ${email}`);
-
+  
       // 사용자 입력 이메일 암호화
       const encryptedEmail = encrypt(email);
       console.log(`암호화된 이메일: ${encryptedEmail}`);
-
+  
       // prepared statement 사용하여 사용자 정보 조회
       const query = 'SELECT * FROM users WHERE email = ?';
       const [user] = await db.execute(query, [encryptedEmail]);
-
+  
       console.log(`조회된 사용자: ${JSON.stringify(user)}`);
-
+  
       if (user.length === 0) {
         return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
       }
-
+  
       const currentUser = user[0];
-
+  
       // 이미 로그인 중인지 확인
       if (currentUser.is_LogIn) {
         return res.status(401).send({ message: '이미 다른 디바이스에서 로그인 중입니다.' });
       }
-
+  
       // 비밀번호 확인
       const passwordMatch = await bcrypt.compare(password, currentUser.password);
       if (!passwordMatch) {
         return res.status(401).send({ message: '잘못된 이메일 또는 비밀번호입니다.' });
       }
-
+  
       // 이메일 인증 확인
       if (!currentUser.email_verified) {
         return res.status(401).send({ message: '이메일 인증이 완료되지 않았습니다.' });
       }
-
+  
       // 로그인 성공
       logAction(email, 'Login successful');
       await db.query('UPDATE users SET is_LogIn = 1, last_activity = NOW() WHERE id = ?', [currentUser.id]);
-      res.status(200).send({ message: 'Login successful', userId: currentUser.id });
+  
+      // 세션에 사용자 ID 저장
+      req.session.userId = currentUser.id;
+  
+      req.session.save((err) => { // 세션을 저장
+        if (err) {
+          console.error('세션 저장 중 오류 발생:', err);
+          return res.status(500).send({ message: '세션 저장 중 오류가 발생했습니다.' });
+        }
+        console.log('세션 저장 성공:', req.session.userId); // 세션 저장 성공 로그
+        res.status(200).send({ message: 'Login successful', userId: currentUser.id });
+      });
+  
     } catch (err) {
       console.error(err);
       res.status(500).send({ message: 'Server error' });
     }
-  });
+  });  
 
   // 로그아웃 라우트
   app.post('/userlogout', async (req, res) => {
@@ -778,7 +830,15 @@ app.get('/items', async (req, res) => {
     try {
       // is_LogIn을 0으로 설정
       await db.query('UPDATE users SET is_LogIn = 0 WHERE id = ?', [userId]);
-      res.status(200).send({ message: 'Logout successful' });
+
+      // 세션 파기
+      req.session.destroy((err) => {
+        if (err) {
+          return res.status(500).send({ message: 'Logout failed' });
+        }
+        res.clearCookie('connect.sid');
+        res.status(200).send({ message: 'Logout successful' });
+      });
     } catch (err) {
       // 오류 처리
       res.status(500).send({ message: 'Server error' });
@@ -787,27 +847,53 @@ app.get('/items', async (req, res) => {
 
   // 사용자 이름 조회 라우트
   app.get('/username', async (req, res) => {
-    const userId = req.query.userId;
+    const userId = req.session.userId; // 세션에서 사용자 ID를 가져옵니다.
+    console.log('세션에서 가져온 userId:', userId); // 로그 추가
     logAction(userId, `Username request received: ${userId}`);
     if (!userId) {
       logAction(userId, `Username request error: No user ID provided`);
       return res.status(400).send({ message: 'No user ID provided' });
     }
-
+  
     try {
       const [results] = await db.query('SELECT name FROM users WHERE id = ?', [userId]);
-
+  
       if (results.length === 0) {
         logAction(userId, `Username request error: User not found`);
         return res.status(404).send({ message: 'User not found' });
       }
-
+  
       res.send({ name: results[0].name });
     } catch (err) {
       logAction(userId, `Username request error: ${err.message}`);
       return res.status(500).send({ message: 'Server error' });
     }
   });
+
+  // 사용자 이름 조회 라우트
+app.get('/username/:userId', async (req, res) => {
+  const userId = req.params.userId; // URL에서 사용자 ID를 가져옵니다.
+  console.log('URL에서 가져온 userId:', userId); // 로그 추가
+  logAction(userId, `Username request received: ${userId}`);
+  if (!userId) {
+    logAction(userId, `Username request error: No user ID provided`);
+    return res.status(400).send({ message: 'No user ID provided' });
+  }
+
+  try {
+    const [results] = await db.query('SELECT name FROM users WHERE id = ?', [userId]);
+
+    if (results.length === 0) {
+      logAction(userId, `Username request error: User not found`);
+      return res.status(404).send({ message: 'User not found' });
+    }
+
+    res.send({ name: results[0].name });
+  } catch (err) {
+    logAction(userId, `Username request error: ${err.message}`);
+    return res.status(500).send({ message: 'Server error' });
+  }
+});
 
   // 계정 찾기 라우트
   app.post('/findAccount', async (req, res) => {
@@ -967,39 +1053,38 @@ app.get('/items', async (req, res) => {
   });
 
   // 장바구니 조회
-app.get('/cart/:userId', async (req, res) => {
-  const { userId } = req.params;
+  app.get('/cart/:userId', async (req, res) => {
+    const { userId } = req.params;
 
-  try {
-    const [cartItems] = await db.query(
-      'SELECT c.item_id, i.name, i.image_url, SUM(c.quantity) as quantity FROM cart c JOIN items i ON c.item_id = i.id WHERE c.user_id = ? GROUP BY c.item_id, i.name, i.image_url',
-      [userId]
-    );
-    res.send(cartItems);
-  } catch (err) {
-    console.error(`Failed to fetch cart items: ${err.message}`);
-    res.status(500).send({ message: 'Server error' });
-  }
-});
+    try {
+      const [cartItems] = await db.query(
+        'SELECT c.item_id, i.name, i.image_url, SUM(c.quantity) as quantity FROM cart c JOIN items i ON c.item_id = i.id WHERE c.user_id = ? GROUP BY c.item_id, i.name, i.image_url',
+        [userId]
+      );
+      res.send(cartItems);
+    } catch (err) {
+      console.error(`Failed to fetch cart items: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
 
-// 장바구니 아이템 수량 업데이트
-app.put('/cart/:userId/:itemId', async (req, res) => {
-  const { userId, itemId } = req.params;
-  const { quantity } = req.body;
+  // 장바구니 아이템 수량 업데이트
+  app.put('/cart/:userId/:itemId', async (req, res) => {
+    const { userId, itemId } = req.params;
+    const { quantity } = req.body;
 
-  if (!quantity || quantity <= 0) {
-    return res.status(400).send({ message: 'Invalid quantity' });
-  }
+    if (!quantity || quantity <= 0) {
+      return res.status(400).send({ message: 'Invalid quantity' });
+    }
 
-  try {
-    await db.query('UPDATE cart SET quantity = ? WHERE user_id = ? AND item_id = ?', [quantity, userId, itemId]);
-    res.status(200).send({ message: 'Quantity updated successfully' });
-  } catch (err) {
-    console.error(`Failed to update item quantity: ${err.message}`);
-    res.status(500).send({ message: 'Server error' });
-  }
-});
-
+    try {
+      await db.query('UPDATE cart SET quantity = ? WHERE user_id = ? AND item_id = ?', [quantity, userId, itemId]);
+      res.status(200).send({ message: 'Quantity updated successfully' });
+    } catch (err) {
+      console.error(`Failed to update item quantity: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
 
   // 장바구니 아이템 삭제
   app.delete('/cart/:userId/:itemId', async (req, res) => {
@@ -1014,62 +1099,60 @@ app.put('/cart/:userId/:itemId', async (req, res) => {
     }
   });
 
-// 주문 생성
-app.post('/orders', async (req, res) => {
-  const { userId, items } = req.body;
+  // 주문 생성
+  app.post('/orders', async (req, res) => {
+    const { userId, items } = req.body;
 
-  if (!userId || !items || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).send({ message: 'Missing userId or items' });
-  }
+    if (!userId || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).send({ message: 'Missing userId or items' });
+    }
 
-  try {
-    const [itemIds] = await db.query('SELECT id, price FROM items WHERE id IN (?)', [items.map(item => item.item_id)]);
-    const itemMap = itemIds.reduce((acc, item) => {
-      acc[item.id] = item.price;
-      return acc;
-    }, {});
+    try {
+      const [itemIds] = await db.query('SELECT id, price FROM items WHERE id IN (?)', [items.map(item => item.item_id)]);
+      const itemMap = itemIds.reduce((acc, item) => {
+        acc[item.id] = item.price;
+        return acc;
+      }, {});
 
-    const totalAmount = items.reduce((sum, item) => sum + itemMap[item.item_id] * item.quantity, 0);
+      const totalAmount = items.reduce((sum, item) => sum + itemMap[item.item_id] * item.quantity, 0);
 
-    // 주문 생성
-    const [orderResult] = await db.query('INSERT INTO orders (user_id, total_amount) VALUES (?, ?)', [userId, totalAmount]);
-    const orderId = orderResult.insertId;
+      // 주문 생성
+      const [orderResult] = await db.query('INSERT INTO orders (user_id, total_amount) VALUES (?, ?)', [userId, totalAmount]);
+      const orderId = orderResult.insertId;
 
-    // 주문 아이템 추가
-    const orderItems = items.map(item => [orderId, item.item_id, item.quantity]);
-    await db.query('INSERT INTO order_items (order_id, item_id, quantity) VALUES ?', [orderItems]);
+      // 주문 아이템 추가
+      const orderItems = items.map(item => [orderId, item.item_id, item.quantity]);
+      await db.query('INSERT INTO order_items (order_id, item_id, quantity) VALUES ?', [orderItems]);
 
-    res.status(201).send({ message: 'Order created successfully', orderId });
-  } catch (err) {
-    console.error(`Failed to create order: ${err.message}`);
-    res.status(500).send({ message: 'Server error' });
-  }
-});
-
-
+      res.status(201).send({ message: 'Order created successfully', orderId });
+    } catch (err) {
+      console.error(`Failed to create order: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
 
   // 주문 조회
-app.get('/orders/:userId', async (req, res) => {
-  const { userId } = req.params;
+  app.get('/orders/:userId', async (req, res) => {
+    const { userId } = req.params;
 
-  try {
-    const [orders] = await db.query('SELECT * FROM orders WHERE user_id = ?', [userId]);
+    try {
+      const [orders] = await db.query('SELECT * FROM orders WHERE user_id = ?', [userId]);
 
-    const ordersWithItems = await Promise.all(orders.map(async order => {
-      const [orderItems] = await db.query(
-        'SELECT oi.*, i.name, i.price FROM order_items oi JOIN items i ON oi.item_id = i.id WHERE oi.order_id = ?',
-        [order.id]
-      );
-      order.items = orderItems;
-      return order;
-    }));
+      const ordersWithItems = await Promise.all(orders.map(async order => {
+        const [orderItems] = await db.query(
+          'SELECT oi.*, i.name, i.price FROM order_items oi JOIN items i ON oi.item_id = i.id WHERE oi.order_id = ?',
+          [order.id]
+        );
+        order.items = orderItems;
+        return order;
+      }));
 
-    res.send(ordersWithItems);
-  } catch (err) {
-    console.error(`Failed to fetch orders: ${err.message}`);
-    res.status(500).send({ message: 'Server error' });
-  }
-});
+      res.send(ordersWithItems);
+    } catch (err) {
+      console.error(`Failed to fetch orders: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
 
   // 주문 상세 조회
   app.get('/order/:orderId', async (req, res) => {
@@ -1088,45 +1171,46 @@ app.get('/orders/:userId', async (req, res) => {
   });
 
   // 주문 삭제
-app.delete('/orders/:orderId', async (req, res) => {
-  const { orderId } = req.params;
+  app.delete('/orders/:orderId', async (req, res) => {
+    const { orderId } = req.params;
 
-  try {
-    await db.query('DELETE FROM order_items WHERE order_id = ?', [orderId]);
-    await db.query('DELETE FROM orders WHERE id = ?', [orderId]);
-    res.status(200).send({ message: 'Order deleted successfully' });
-  } catch (err) {
-    console.error(`Failed to delete order: ${err.message}`);
-    res.status(500).send({ message: 'Server error' });
-  }
-});
+    try {
+      await db.query('DELETE FROM order_items WHERE order_id = ?', [orderId]);
+      await db.query('DELETE FROM orders WHERE id = ?', [orderId]);
+      res.status(200).send({ message: 'Order deleted successfully' });
+    } catch (err) {
+      console.error(`Failed to delete order: ${err.message}`);
+      res.status(500).send({ message: 'Server error' });
+    }
+  });
 
   // 사용자 정보 조회 라우트
-app.get('/userinfo/:userId', async (req, res) => {
-  const userId = req.params.userId;
+  app.get('/userinfo/:userId', async (req, res) => {
+    const userId = req.params.userId;
 
-  try {
-    const [results] = await db.execute('SELECT email, name, phone FROM users WHERE id = ?', [userId]);
+    try {
+      const [results] = await db.execute('SELECT email, name, phone FROM users WHERE id = ?', [userId]);
 
-    if (results.length > 0) {
-      const userInfo = results[0];
-      const decryptedEmail = decrypt(userInfo.email);
-      const decryptedPhone = decrypt(userInfo.phone);
-      logAction(userId, `Userinfo request: User information retrieved`);
-      res.send({ email: decryptedEmail, name: userInfo.name, phone: decryptedPhone });
-    } else {
-      logAction(userId, 'Userinfo request: User not found');
-      res.status(404).send({ message: 'User not found' });
+      if (results.length > 0) {
+        const userInfo = results[0];
+        const decryptedEmail = decrypt(userInfo.email);
+        const decryptedPhone = decrypt(userInfo.phone);
+        logAction(userId, `Userinfo request: User information retrieved`);
+        res.send({ email: decryptedEmail, name: userInfo.name, phone: decryptedPhone });
+      } else {
+        logAction(userId, 'Userinfo request: User not found');
+        res.status(404).send({ message: 'User not found' });
+      }
+    } catch (err) {
+      logAction(userId, `Userinfo request error: ${err.message}`);
+      return res.status(500).send({ message: 'Server error' });
     }
-  } catch (err) {
-    logAction(userId, `Userinfo request error: ${err.message}`);
-    return res.status(500).send({ message: 'Server error' });
-  }
-});
+  });
 
   // 서버 시작
   app.listen(3000, '0.0.0.0', () => {
     logAction('System', 'Server is running on port 3000');
+    console.log('서버가 3000 포트에서 실행 중입니다.'); // 로그 추가
   });
 }
 
