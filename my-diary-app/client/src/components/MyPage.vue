@@ -1,46 +1,33 @@
 <template>
   <div class="my-container">
     <div class="timer">자동 로그아웃: {{ remainingTime }}초</div>
-    <!-- 페이지 제목 -->
     <h1 class="my-title">My Page</h1>
-
-    <!-- 사용자 이름 표시 -->
     <div class="user-name-section">
       {{ userName }} 님
     </div>
-
-    <!-- 내 정보 -->
-    <div class="user-info-section" @click="showUserInfo">
-      내 정보 조회
+    <div class="action-section">
+      <div class="action-item" @click="showUserInfo">
+        내 정보 조회
+      </div>
+      <div class="action-item" @click="ResetPassword">
+        비밀번호 재설정
+      </div>
+      <router-link to="/add-item" class="action-item">아이템 추가하기</router-link>
+      <router-link to="/edit-item/1" class="action-item">아이템 수정하기</router-link>
+      <button @click="goToMainPage" class="action-item">메인 페이지로 이동</button>
     </div>
-
-    <!-- 비밀번호 재설정 -->
-    <div class="password-reset-section" @click="ResetPassword">
-      비밀번호 재설정
-    </div>
-
-    <!-- 아이템 추가하기 -->
-    <div class="add-item-section">
-      <router-link to="/add-item">아이템 추가하기</router-link>
-    </div>
-
-    <!-- 아이템 수정하기 -->
-    <div class="edit-item-section">
-      <router-link to="/edit-item/1">아이템 수정하기</router-link> <!-- 임시로 1번 아이템을 수정하는 링크 -->
-    </div>
-
-    <!-- 메인 페이지로 이동하기 -->
-    <div class="go-to-main-section">
-      <button @click="goToMainPage">메인 페이지로 이동</button>
-    </div>
-
-    <!-- 아이템 목록 -->
     <div class="item-list-section">
       <h2>내 아이템 목록</h2>
-      <div v-for="item in items" :key="item.id" class="item">
-        <p>{{ item.name }}</p>
-        <button @click="deleteItem(item.id)">삭제</button>
+      <div class="items-container">
+        <div v-for="item in items" :key="item.id" class="item">
+          <p>{{ item.name }}</p>
+          <button @click="deleteItem(item.id)">삭제</button>
+        </div>
       </div>
+    </div>
+    <div class="action-section">
+      <router-link to="/cart" class="action-item">내 장바구니 보기</router-link>
+      <router-link to="/orders" class="action-item">구매 목록 보기</router-link>
     </div>
   </div>
 </template>
@@ -52,9 +39,9 @@ export default {
   data() {
     return {
       userName: '익명',
-      remainingTime: 600, // 초단위 (10분)
+      remainingTime: 600,
       timer: null,
-      items: [] // 아이템 목록 추가
+      items: []
     };
   },
   methods: {
@@ -84,19 +71,19 @@ export default {
     },
     fetchUserName() {
       axios.get(`${process.env.VUE_APP_BACKEND_URL}/username`, {
-          params: {
-          userId: localStorage.getItem('userId') // 사용자 ID 가져오기
-          }
+        params: {
+          userId: localStorage.getItem('userId')
+        }
       })
       .then(response => {
-          this.userName = response.data.name; // 사용자 이름 설정
+        this.userName = response.data.name;
       })
       .catch(error => {
-          console.error('Error fetching user name:', error);
+        console.error('Error fetching user name:', error);
       });
     },
     fetchItems() {
-      const userId = localStorage.getItem('userId'); // 현재 로그인한 사용자 ID 가져오기
+      const userId = localStorage.getItem('userId');
       axios.get(`${process.env.VUE_APP_BACKEND_URL}/items`, {
         params: { userId }
       })
@@ -108,35 +95,35 @@ export default {
       });
     },
     deleteItem(itemId) {
-      const userId = localStorage.getItem('userId');
-      axios.delete(`${process.env.VUE_APP_BACKEND_URL}/items/${itemId}`, { data: { userId } })
-        .then(() => {
-          this.items = this.items.filter(item => item.id !== itemId);
-          alert('아이템이 성공적으로 삭제되었습니다.');
-        })
-        .catch(error => {
-          console.error('Failed to delete item:', error);
-          alert('아이템 삭제에 실패했습니다.');
-        });
+    const userId = localStorage.getItem('userId');
+    axios.delete(`${process.env.VUE_APP_BACKEND_URL}/items/${itemId}`, { data: { userId } })
+      .then(() => {
+        this.items = this.items.filter(item => item.id !== itemId);
+        alert('아이템이 성공적으로 삭제되었습니다.');
+      })
+      .catch(error => {
+        console.error('Failed to delete item:', error);
+        alert('아이템 삭제에 실패했습니다.');
+      });
     },
     resetTimer() {
-      this.remainingTime = 600; // 타이머를 10분으로 재설정
+      this.remainingTime = 600;
     },
     updateTimer() {
       if (this.remainingTime > 0) {
         this.remainingTime--;
       } else {
-        this.logout(); // 타이머가 0이 되면 로그아웃 실행
+        this.logout();
       }
     },
     logout() {
-      clearInterval(this.timerId); // 타이머 초기화
+      clearInterval(this.timer);
       const userId = localStorage.getItem('userId');
       if (userId) {
         axios.post(`${process.env.VUE_APP_BACKEND_URL}/userlogout`, { userId })
           .then(() => {
             localStorage.removeItem('userId');
-            this.$router.push('/userlogin'); // 로그인 페이지로 리디렉션
+            this.$router.push('/userlogin');
           })
           .catch(error => {
             console.error('로그아웃 실패:', error);
@@ -151,27 +138,23 @@ export default {
     }
   },
   created() {
-    this.fetchUserName(); // 컴포넌트 생성 시 사용자 이름 조회
-    this.fetchItems(); // 아이템 목록 조회
+    this.fetchUserName();
+    this.fetchItems();
     
-    // 로컬 스토리지에서 사용자 ID 확인
     const userId = localStorage.getItem('userId');
-
-    // 사용자 ID가 없으면 로그인 페이지로 리디렉션
     if (!userId) {
       alert("비정상적인 접근입니다.");
       this.$router.push('/userlogin');
     }
   },
   mounted() {
-    this.timer = setInterval(this.updateTimer, 1000); // 1초마다 타이머 감소
+    this.timer = setInterval(this.updateTimer, 1000);
 
-    // 사용자 활동 감지
     window.addEventListener('mousemove', this.resetTimer);
     window.addEventListener('keydown', this.resetTimer);
-  }, 
+  },
   beforeUnmount() {
-    clearInterval(this.timer); // 컴포넌트가 제거되면 타이머 정리
+    clearInterval(this.timer);
     window.removeEventListener('mousemove', this.resetTimer);
     window.removeEventListener('keydown', this.resetTimer);
   }
@@ -179,13 +162,17 @@ export default {
 </script>
 
 <style>
+body {
+  background-color: #f8f9fa;
+  font-family: Arial, sans-serif;
+}
+
 .my-container {
-  max-width: 600px;
+  max-width: 700px;
   margin: 50px auto;
   padding: 20px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  text-align: center;
-  background-color: #f8f9fa;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+  background-color: #fff;
   border-radius: 10px;
 }
 
@@ -193,17 +180,25 @@ export default {
   font-size: 2.5rem;
   margin-bottom: 20px;
   color: #343a40;
+  text-align: center;
 }
 
 .user-name-section {
   font-size: 1.5rem;
   margin-bottom: 20px;
   color: #495057;
+  text-align: center;
 }
 
-.user-info-section, .password-reset-section, .add-item-section, .edit-item-section, .go-to-main-section, .item-list-section {
-  width: 100%;
-  padding: 15px 0;
+.action-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.action-item {
+  padding: 15px;
   cursor: pointer;
   font-size: 1.25rem;
   color: #007bff;
@@ -211,57 +206,76 @@ export default {
   text-align: center;
   border: 1px solid #dee2e6;
   border-radius: 5px;
-  margin-bottom: 10px;
+  background-color: #ffffff;
+  transition: background-color 0.2s, box-shadow 0.2s;
 }
 
-.user-info-section:hover, .password-reset-section:hover, .add-item-section:hover, .edit-item-section:hover, .go-to-main-section:hover, .item-list-section:hover {
+.action-item:hover {
   background-color: #e9ecef;
-}
-
-button {
-  padding: 10px 20px;
-  font-size: 16px;
-  cursor: pointer;
-  margin-top: 10px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 5px;
-}
-
-button:hover {
-  background-color: #0056b3;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .item-list-section {
   text-align: left;
-  background-color: #ffffff;
   padding: 20px;
+  background-color: #ffffff;
   border-radius: 10px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
+}
+
+.item-list-section h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #343a40;
+}
+
+.items-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .item {
   display: flex;
+  flex-direction: column;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #dee2e6;
+  width: calc(25% - 10px);
+  padding: 10px;
+  border: 1px solid #dee2e6;
+  border-radius: 10px;
+  background-color: #ffffff;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
 }
 
 .item p {
   margin: 0;
   font-size: 1rem;
   color: #495057;
+  text-align: center;
 }
 
 .item button {
+  margin-top: 10px;
   background-color: #dc3545;
   padding: 5px 10px;
   font-size: 0.875rem;
+  border: none;
   border-radius: 5px;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.2s;
 }
 
 .item button:hover {
   background-color: #c82333;
+}
+
+.timer {
+  font-size: 1rem;
+  color: #343a40;
+  margin-bottom: 20px;
+  text-align: center;
 }
 </style>
