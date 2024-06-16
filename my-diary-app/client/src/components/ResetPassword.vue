@@ -67,7 +67,7 @@ export default {
     },
     updatePassword() {
       if (!this.isFormValid) {
-        alert("비밀번호 유효성 검사를 통과하지 못했습니다.");
+        alert("비밀번호 입력을 확인해 주세요.");
         return;
       }
       axios.post(`${process.env.VUE_APP_BACKEND_URL}/updatePassword`, {
@@ -79,7 +79,7 @@ export default {
         this.$router.push('/userlogin');
       })
       .catch(error => {
-        console.error('비밀번호 변경 오류:', error);
+        console.error('비밀번호 변경 오류');
         alert('비밀번호 변경 중 오류가 발생했습니다.');
       });
     },
@@ -103,7 +103,7 @@ export default {
             this.$router.push('/userlogin'); // 로그인 페이지로 리디렉션
           })
           .catch(error => {
-            console.error('로그아웃 실패:', error);
+            console.error('로그아웃 실패');
           });
       }
     },

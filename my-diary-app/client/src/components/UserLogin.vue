@@ -56,7 +56,7 @@
           .then(response => {
             // 로그인 성공
             alert("108번가에 오신 것을 환영합니다.");
-            console.log('로그인 성공:', response.data);
+            console.log('로그인 성공');
             localStorage.setItem('userId', response.data.userId);
             router.push('/mainpage');
           })
@@ -77,10 +77,10 @@
               } else {
                 alert("알 수 없는 오류가 발생했습니다.");
               }
-              console.error('로그인 실패:', error.response.data.message);
+              console.error('로그인 실패');
             } else {
               alert("알 수 없는 오류가 발생했습니다.");
-              console.error('로그인 실패:', error);
+              console.error('로그인 실패');
             }
             this.errorMessage = error.response ? error.response.data.message : "로그인에 실패했습니다.";
 

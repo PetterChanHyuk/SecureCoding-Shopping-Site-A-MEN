@@ -10,27 +10,23 @@
 
       <div class="form-group">
         <label for="category">Category</label>
-        <div class="category-input-container">
-          <select id="category" v-model="selectedCategoryId" required size="1" class="category-select">
-            <option v-for="category in categories" :key="category.id" :value="category.id">
-              {{ category.name }}
-            </option>
-
-          </select>
-        </div>
-        <input type="text" v-model="newCategory" @input="validateNewCategory" placeholder="Add new category" />
+        <select id="category" v-model="selectedCategoryId" required class="category-select">
+          <option v-for="category in categories" :key="category.id" :value="category.id">
+            {{ category.name }}
+          </option>
+        </select>
+        <input type="text" v-model="newCategory" @input="validateNewCategory" placeholder="Add new category" class="new-category-input"/>
         <button type="button" @click="addCategory" :disabled="newCategoryError || !newCategory" class="add-category-btn">Add Category</button>
         <p v-if="newCategoryError" class="error-message">{{ newCategoryError }}</p>
       </div>
-
 
       <div class="form-group">
         <label for="price">Price</label>
         <input type="number" id="price" v-model="price" required />
       </div>
 
-      <label for="itemDescription">Item Description</label>
       <div class="form-group">
+        <label for="itemDescription">Item Description</label>
         <textarea id="itemDescription" v-model="itemDescription"></textarea>
       </div>
 
@@ -38,7 +34,8 @@
         <label for="file">Image</label>
         <input type="file" id="file" @change="onFileChange" />
       </div>
-      <button type="submit">추가</button>
+
+      <button type="submit" class="submit-btn">추가</button>
     </form>
   </div>
 </template>
@@ -61,19 +58,6 @@ export default {
     };
   },
   methods: {
-    escapeHtml(text) {
-      return text.replace(/[&<>"'`=]/g, function (s) {
-        return {
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#39;',
-          '`': '&#x60;',
-          '=': '&#x3D;'
-        }[s];
-      });
-    },
     validateItemName() {
       const regex = /^[a-zA-Z0-9가-힣\s]+$/;
       if (!regex.test(this.itemName)) {
@@ -93,13 +77,9 @@ export default {
     async fetchCategories() {
       try {
         const response = await axios.get(`${process.env.VUE_APP_BACKEND_URL}/categories`);
-        this.categories = response.data.map(category => ({
-          ...category,
-          name: this.escapeHtml(category.name)
-        }));
-
+        this.categories = response.data;
       } catch (err) {
-        console.error('카테고리 목록을 불러오는 데 실패했습니다:', err);
+        console.error('카테고리 목록을 불러오는 데 실패했습니다');
       }
     },
     onFileChange(event) {
@@ -127,19 +107,17 @@ export default {
 
       try {
         const response = await axios.post(`${process.env.VUE_APP_BACKEND_URL}/categories`, {
-          name: this.escapeHtml(this.newCategory)
+          name: this.newCategory
         });
-        this.categories.push({
-          ...response.data,
-          name: this.escapeHtml(response.data.name)
-        });
+        this.categories.push(response.data);
         this.newCategory = '';
       } catch (err) {
-        console.error('카테고리 추가에 실패했습니다:', err);
+        console.error('카테고리 추가에 실패했습니다');
       }
     },
     async addItem() {
-      const userId = localStorage.getItem('userId'); // 사용자 ID 가져오기
+      const userId = localStorage.getItem('userId');
+
       if (!this.itemName || !this.selectedCategoryId || !userId || this.itemNameError || !this.price) {
         alert('모든 필수 항목을 올바르게 입력해 주세요.');
         return;
@@ -166,17 +144,17 @@ export default {
 
       try {
         const response = await axios.post(`${process.env.VUE_APP_BACKEND_URL}/items`, {
-          name: this.escapeHtml(this.itemName),
+          name: this.itemName,
           categoryId: this.selectedCategoryId,
           imageUrl,
-          description: this.escapeHtml(this.itemDescription),
-          userId, // 사용자 ID 추가
-          price: this.price // price 추가
+          description: this.itemDescription,
+          userId,
+          price: this.price
         });
-        console.log('아이템 추가에 성공했습니다:', response.data);
+        console.log('아이템 추가에 성공했습니다');
         this.$router.push('/mainpage');
       } catch (err) {
-        console.error('아이템 추가에 실패했습니다:', err);
+        console.error('아이템 추가에 실패했습니다');
         alert('아이템 추가에 실패했습니다.');
       }
     }
@@ -188,57 +166,105 @@ export default {
 </script>
 
 <style>
+body {
+  font-family: 'Arial', sans-serif;
+  background-color: #f8f9fa;
+  margin: 0;
+  padding: 0;
+}
+
 .add-item-container {
-  width: 300px;
-  margin: auto;
-  padding: 20px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  background-color: #fff;
+  padding: 40px;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  max-width: 400px;
+  margin: 50px auto;
+  text-align: left;
+}
+
+h1 {
+  margin-bottom: 20px;
+  color: #333;
+  font-size: 24px;
   text-align: center;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 15px;
 }
 
-.custom-select-container {
-  position: relative;
-  display: flex;
+label {
+  display: block;
+  margin-bottom: 5px;
+  color: #495057;
 }
 
-.category-select {
-  flex: 0 0 50%;
-  margin-right: 10px;
-  margin-bottom: 10px;
-  overflow-y: auto;
+input[type="text"],
+input[type="number"],
+textarea,
+select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+textarea {
+  height: 100px;
+  resize: none;
+}
+
+input[type="file"] {
+  border: none;
+}
+
+.add-category-btn,
+.submit-btn {
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.add-category-btn[disabled] {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.add-category-btn:hover:not([disabled]),
+.submit-btn:hover {
+  background-color: #0056b3;
+}
+
+.error-message {
+  color: #e74c3c;
+  font-size: 12px;
+  margin-top: 5px;
 }
 
 .category-input-container {
   display: flex;
   align-items: center;
-  justify-content: center;
 }
 
-.custom-select-container input[type="text"] {
-  flex: 1;
-  margin-right: 10px;
+.category-select {
+  width: 100%; /* Ensure the select element takes the full width */
 }
 
-.custom-select-container button {
-  flex-shrink: 0;
+.new-category-input {
+  width: calc(100% - 22px); /* Ensure the new category input takes the full width */
+  margin-top: 10px;
+  box-sizing: border-box;
 }
 
-.custom-select-container::after {
-  content: '▼';
-  position: absolute;
-  top: 50%;
-  right: 10px;
-  transform: translateY(-50%);
-  pointer-events: none;
-}
-
-.error-message {
-  color: red;
-  font-size: 0.9em;
+.add-category-btn {
+  width: 100%;
 }
 </style>
-

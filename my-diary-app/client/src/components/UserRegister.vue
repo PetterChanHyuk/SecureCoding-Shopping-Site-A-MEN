@@ -114,7 +114,7 @@ export default {
           }
         }).open();
       } else {
-        console.error("Daum 우편번호 스크립트가 로드되지 않았습니다.");
+        console.error("네트워크 환경을 확인해 주세요.");
       }
     },
     // 이메일 유효성 검사
@@ -133,7 +133,7 @@ export default {
               this.errorMessage = '이미 존재하는 메일입니다.';
               this.emailExists = true;
             } else {
-              this.errorMessage = error.response.data.message || '이메일 검증 중 오류가 발생했습니다.';
+              this.errorMessage = error.response.data.message || '오류가 발생했습니다.';
             }
           });
       }
@@ -168,8 +168,8 @@ export default {
             if (error.response && error.response.status === 409) {
               this.phoneExists = true;
             } else {
-              this.errorMessage = '전화번호 검증 중 오류가 발생했습니다.';
-              console.error('Error checking phone number:', error);
+              this.errorMessage = '오류가 발생했습니다.';
+              console.error('Error checking phone number');
               alert(this.errorMessage);
             }
           });
@@ -222,7 +222,7 @@ export default {
             errorMessage = error.response.data.message || errorMessage;
             alert(`회원가입에 실패했습니다: ${this.errorMessage}`);
           } else {
-            errorMessage = "서버 오류 또는 네트워크 문제로 인한 회원가입 실패";
+            errorMessage = "네트워크 문제로 인한 회원가입 실패";
           }
 
           console.error('회원가입 실패:', errorMessage);

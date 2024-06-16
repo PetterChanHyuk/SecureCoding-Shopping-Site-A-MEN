@@ -154,7 +154,7 @@
             alert('잘못된 정보입니다.');
             } else {
             // 기타 서버 오류
-            console.error('계정 찾기 오류:', error);
+            console.error('오류가 발생했습니다.');
             alert('오류가 발생했습니다.');
             }
         });
@@ -170,7 +170,7 @@
         })
         .catch(error => {
           // 오류 처리
-          console.error('비밀번호 재설정 요청 오류:', error);
+          console.error('비밀번호 재설정 요청 오류');
           alert('오류가 발생했습니다.');
         });
       }

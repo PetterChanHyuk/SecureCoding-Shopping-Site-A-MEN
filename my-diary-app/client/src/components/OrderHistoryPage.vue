@@ -42,7 +42,7 @@ export default {
         const response = await axios.get(`${process.env.VUE_APP_BACKEND_URL}/orders/${userId}`);
         this.orders = response.data;
       } catch (error) {
-        console.error('Failed to fetch orders:', error);
+        console.error('Failed to fetch orders');
       }
     },
     async deleteOrder(orderId) {
@@ -51,7 +51,7 @@ export default {
         this.orders = this.orders.filter(order => order.id !== orderId);
         alert('주문이 삭제되었습니다.');
       } catch (error) {
-        console.error('Failed to delete order:', error);
+        console.error('Failed to delete order');
         alert('주문 삭제에 실패했습니다.');
       }
     },
@@ -62,10 +62,10 @@ export default {
           const response = await axios.get(`${process.env.VUE_APP_BACKEND_URL}/username/${userId}`);
           this.userName = response.data.name;
         } catch (error) {
-          console.error('Error fetching user name:', error);
+          console.error('Error fetching user name');
         }
       } else {
-        console.error('No user ID found in local storage.');
+        console.error('No user ID found.');
       }
     },
     goToMainPage() {
@@ -78,7 +78,7 @@ export default {
         localStorage.removeItem('userId');
         this.$router.push('/userlogin');
       } catch (error) {
-        console.error('로그아웃 실패:', error);
+        console.error('로그아웃 실패');
       }
     }
   },

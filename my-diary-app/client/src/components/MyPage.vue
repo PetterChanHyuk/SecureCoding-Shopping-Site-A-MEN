@@ -48,7 +48,7 @@ export default {
     showUserInfo() {
       const userId = localStorage.getItem('userId');
       if (!userId) {
-        alert("사용자 정보를 불러올 수 없습니다.");
+        alert("사용자 정보를 불러오는데 실패했습니다.");
         return;
       }
       axios.get(`${process.env.VUE_APP_BACKEND_URL}/userinfo/${userId}`)
@@ -57,14 +57,14 @@ export default {
           alert(`귀하의 정보입니다.\n이메일: ${userInfo.email}\n이름: ${userInfo.name}\n전화번호: ${userInfo.phone}`);
         })
         .catch(error => {
-          console.error('Error fetching user info:', error);
+          console.error('Error fetching user info');
           alert('사용자 정보를 불러오는데 실패했습니다.');
         });
     },
     ResetPassword() {
       const userId = localStorage.getItem('userId');
       if (!userId) {
-        alert("사용자 ID를 불러올 수 없습니다.");
+        alert("사용자 정보를 불러오는데 실패했습니다.");
         return;
       }
       this.$router.push({ path: '/reset-password', query: { userId } });
@@ -79,7 +79,7 @@ export default {
         this.userName = response.data.name;
       })
       .catch(error => {
-        console.error('Error fetching user name:', error);
+        console.error('Error fetching user name');
       });
     },
     fetchItems() {
@@ -91,7 +91,7 @@ export default {
         this.items = response.data;
       })
       .catch(error => {
-        console.error('Failed to fetch items:', error);
+        console.error('Failed to fetch items');
       });
     },
     deleteItem(itemId) {
@@ -102,7 +102,7 @@ export default {
         alert('아이템이 성공적으로 삭제되었습니다.');
       })
       .catch(error => {
-        console.error('Failed to delete item:', error);
+        console.error('Failed to delete item');
         alert('아이템 삭제에 실패했습니다.');
       });
     },
@@ -126,7 +126,7 @@ export default {
             this.$router.push('/userlogin');
           })
           .catch(error => {
-            console.error('로그아웃 실패:', error);
+            console.error('로그아웃 실패');
           });
       }
     },
