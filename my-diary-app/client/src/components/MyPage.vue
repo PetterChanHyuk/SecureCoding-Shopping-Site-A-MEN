@@ -5,39 +5,35 @@
     <div class="user-name-section">
       {{ userName }} 님
     </div>
-    <div class="section" @click="showUserInfo">
-      내 정보 조회
-    </div>
-    <div class="section" @click="resetPassword">
-      비밀번호 재설정
-    </div>
-    <div class="section">
-      <router-link to="/add-item">아이템 추가하기</router-link>
-    </div>
-    <div class="section">
-      <router-link to="/edit-item/1">아이템 수정하기</router-link>
-    </div>
-    <div class="go-to-main-section">
-      <button @click="goToMainPage">메인 페이지로 이동</button>
+    <div class="action-section">
+      <div class="action-item" @click="showUserInfo">
+        내 정보 조회
+      </div>
+      <div class="action-item" @click="ResetPassword">
+        비밀번호 재설정
+      </div>
+      <router-link to="/add-item" class="action-item">아이템 추가하기</router-link>
+      <router-link to="/edit-item/1" class="action-item">아이템 수정하기</router-link>
+      <button @click="goToMainPage" class="action-item">메인 페이지로 이동</button>
     </div>
     <div class="item-list-section">
       <h2>내 아이템 목록</h2>
-      <div v-for="item in items" :key="item.id" class="item">
-        <p>{{ item.name }}</p>
-        <button @click="deleteItem(item.id)">삭제</button>
+      <div class="items-container">
+        <div v-for="item in items" :key="item.id" class="item">
+          <p>{{ item.name }}</p>
+          <button @click="deleteItem(item.id)">삭제</button>
+        </div>
       </div>
     </div>
-    <div class="section">
-      <router-link to="/cart">내 장바구니 보기</router-link>
-    </div>
-    <div class="section">
-      <router-link to="/orders">구매 목록 보기</router-link>
+    <div class="action-section">
+      <router-link to="/cart" class="action-item">내 장바구니 보기</router-link>
+      <router-link to="/orders" class="action-item">구매 목록 보기</router-link>
     </div>
   </div>
 </template>
 
 <script>
-import api from '../api';
+import axios from 'axios';
 
 export default {
   data() {
@@ -49,26 +45,13 @@ export default {
     };
   },
   methods: {
-    escapeHtml(text) {
-      return text.replace(/[&<>"'`=]/g, function (s) {
-        return {
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#39;',
-          '`': '&#x60;',
-          '=': '&#x3D;'
-        }[s];
-      });
-    },
     showUserInfo() {
       const userId = localStorage.getItem('userId');
       if (!userId) {
         alert("사용자 정보를 불러올 수 없습니다.");
         return;
       }
-      api.get(`/userinfo/${userId}`)
+      axios.get(`${process.env.VUE_APP_BACKEND_URL}/userinfo/${userId}`)
         .then(response => {
           const userInfo = response.data;
           alert(`귀하의 정보입니다.\n이메일: ${userInfo.email}\n이름: ${userInfo.name}\n전화번호: ${userInfo.phone}`);
@@ -78,7 +61,7 @@ export default {
           alert('사용자 정보를 불러오는데 실패했습니다.');
         });
     },
-    resetPassword() {
+    ResetPassword() {
       const userId = localStorage.getItem('userId');
       if (!userId) {
         alert("사용자 ID를 불러올 수 없습니다.");
@@ -87,44 +70,41 @@ export default {
       this.$router.push({ path: '/reset-password', query: { userId } });
     },
     fetchUserName() {
-      const userId = localStorage.getItem('userId');
-      if (userId) {
-        api.get(`/username/${userId}`)
-          .then(response => {
-            this.userName = this.escapeHtml(response.data.name);
-          })
-          .catch(error => {
-            console.error('Error fetching user name:', error);
-          });
-      } else {
-        console.error('No user ID found in local storage.');
-      }
+      axios.get(`${process.env.VUE_APP_BACKEND_URL}/username`, {
+        params: {
+          userId: localStorage.getItem('userId')
+        }
+      })
+      .then(response => {
+        this.userName = response.data.name;
+      })
+      .catch(error => {
+        console.error('Error fetching user name:', error);
+      });
     },
     fetchItems() {
       const userId = localStorage.getItem('userId');
-      api.get(`/user-items/${userId}`)
-        .then(response => {
-          this.items = response.data.map(item => ({
-            ...item,
-            name: this.escapeHtml(item.name),
-            description: this.escapeHtml(item.description)
-          }));
-        })
-        .catch(error => {
-          console.error('Failed to fetch items:', error);
-        });
+      axios.get(`${process.env.VUE_APP_BACKEND_URL}/items`, {
+        params: { userId }
+      })
+      .then(response => {
+        this.items = response.data;
+      })
+      .catch(error => {
+        console.error('Failed to fetch items:', error);
+      });
     },
     deleteItem(itemId) {
-      const userId = localStorage.getItem('userId');
-      api.delete(`/items/${itemId}`, { data: { userId } })
-        .then(() => {
-          this.items = this.items.filter(item => item.id !== itemId);
-          alert('아이템이 성공적으로 삭제되었습니다.');
-        })
-        .catch(error => {
-          console.error('Failed to delete item:', error);
-          alert('아이템 삭제에 실패했습니다.');
-        });
+    const userId = localStorage.getItem('userId');
+    axios.delete(`${process.env.VUE_APP_BACKEND_URL}/items/${itemId}`, { data: { userId } })
+      .then(() => {
+        this.items = this.items.filter(item => item.id !== itemId);
+        alert('아이템이 성공적으로 삭제되었습니다.');
+      })
+      .catch(error => {
+        console.error('Failed to delete item:', error);
+        alert('아이템 삭제에 실패했습니다.');
+      });
     },
     resetTimer() {
       this.remainingTime = 600;
@@ -140,7 +120,7 @@ export default {
       clearInterval(this.timer);
       const userId = localStorage.getItem('userId');
       if (userId) {
-        api.post('/userlogout', { userId })
+        axios.post(`${process.env.VUE_APP_BACKEND_URL}/userlogout`, { userId })
           .then(() => {
             localStorage.removeItem('userId');
             this.$router.push('/userlogin');
@@ -182,88 +162,102 @@ export default {
 </script>
 
 <style>
+body {
+  background-color: #f8f9fa;
+  font-family: Arial, sans-serif;
+}
+
 .my-container {
-  max-width: 500px;
-  margin: 40px auto;
+  max-width: 700px;
+  margin: 50px auto;
   padding: 20px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  text-align: center;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
   background-color: #fff;
   border-radius: 10px;
-  font-family: 'Arial', sans-serif;
 }
 
 .my-title {
-  font-size: 2rem;
+  font-size: 2.5rem;
   margin-bottom: 20px;
-  color: #333;
-  font-weight: bold;
+  color: #343a40;
+  text-align: center;
 }
 
 .user-name-section {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   margin-bottom: 20px;
-  color: #666;
+  color: #495057;
+  text-align: center;
 }
 
-.section {
-  width: 100%;
-  padding: 12px 0;
-  font-size: 1.125rem;
+.action-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.action-item {
+  padding: 15px;
+  cursor: pointer;
+  font-size: 1.25rem;
   color: #007bff;
   text-decoration: none;
   text-align: center;
-  border: 1px solid #007bff;
+  border: 1px solid #dee2e6;
   border-radius: 5px;
-  margin-bottom: 15px;
-  transition: background-color 0.3s, color 0.3s;
+  background-color: #ffffff;
+  transition: background-color 0.2s, box-shadow 0.2s;
 }
 
-.section:hover {
-  background-color: #007bff;
-  color: white;
-  cursor: pointer;
-}
-
-button {
-  padding: 10px 20px;
-  font-size: 1rem;
-  cursor: pointer;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  transition: background-color 0.3s;
-}
-
-button:hover {
-  background-color: #0056b3;
+.action-item:hover {
+  background-color: #e9ecef;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .item-list-section {
   text-align: left;
-  background-color: #f8f9fa;
   padding: 20px;
+  background-color: #ffffff;
   border-radius: 10px;
-  border: 1px solid #ddd;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
   margin-bottom: 20px;
+}
+
+.item-list-section h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #343a40;
+}
+
+.items-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .item {
   display: flex;
+  flex-direction: column;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #ddd;
+  width: calc(25% - 10px);
+  padding: 10px;
+  border: 1px solid #dee2e6;
+  border-radius: 10px;
+  background-color: #ffffff;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
 }
 
 .item p {
   margin: 0;
   font-size: 1rem;
-  color: #333;
+  color: #495057;
+  text-align: center;
 }
 
 .item button {
+  margin-top: 10px;
   background-color: #dc3545;
   padding: 5px 10px;
   font-size: 0.875rem;
@@ -271,7 +265,7 @@ button:hover {
   border-radius: 5px;
   color: white;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: background-color 0.2s;
 }
 
 .item button:hover {
@@ -279,8 +273,9 @@ button:hover {
 }
 
 .timer {
-  font-size: 0.875rem;
-  color: #dc3545;
-  margin-bottom: 15px;
+  font-size: 1rem;
+  color: #343a40;
+  margin-bottom: 20px;
+  text-align: center;
 }
 </style>

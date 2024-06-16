@@ -2,6 +2,10 @@
   <div id="app">
     <header>
       <h1 @click="refreshPage">108번가</h1>
+      <div class="search-bar">
+        <input type="text" v-model="searchQuery" placeholder="Search for items..." />
+        <button @click="search">검색</button>
+      </div>
       <div class="user-info">
         {{ userName }}님 |
         <router-link to="/mypage">마이페이지</router-link> |
@@ -11,29 +15,30 @@
       </div>
       <div class="timer">자동 로그아웃: {{ remainingTime }}초</div>
     </header>
-    <nav class="category-menu">
-      <button :class="{'active': selectedCategory === null}" @click="filterByCategory(null)">
-        전체
-      </button>
-      <button v-for="category in categories" :key="category.id" @click="filterByCategory(category)"
-        :class="{'active': selectedCategory === category}">
-        {{ category.name }}
-      </button>
-    </nav>
     <main>
-      <div class="search-bar">
-        <input type="text" v-model="searchQuery" placeholder="Search for items..." />
-        <button @click="search">검색</button>
-      </div>
+      <nav class="category-menu">
+        <button :class="{'active': selectedCategory === null}" @click="filterByCategory(null)">
+          전체
+        </button>
+        <button v-for="category in categories" :key="category.id" @click="filterByCategory(category)"
+          :class="{'active': selectedCategory && selectedCategory.id === category.id}">
+          {{ category.name }}
+        </button>
+      </nav>
       <div class="item-container">
-        <div v-for="item in filteredItems" :key="item.id" class="item">
-          <img :src="getImageUrl(item.image_url)" alt="Item Image" class="item-image" />
-          <div class="item-details">
+        <div v-for="item in filteredItems" :key="item.id" class="item-wrapper">
+          <div class="item" @click="toggleItemDetails(item)">
+            <img :src="getImageUrl(item.image_url)" alt="Item Image" class="item-image" />
             <h3>{{ item.name }}</h3>
-            <p>{{ item.description }}</p>
-            <div class="item-actions">
-              <button @click="addToCart(item.id)">장바구니에 추가</button>
-              <button @click="buyNow(item.id)">바로 구매</button>
+          </div>
+          <div v-if="selectedItem && selectedItem.id === item.id" class="item-details-container">
+            <div class="item-details">
+              <p>{{ item.price }}원</p>
+              <p>{{ item.description }}</p>
+              <div class="item-actions">
+                <button @click="addToCart(item.id)">장바구니 추가</button>
+                <button @click="buyNow(item.id)">바로 구매</button>
+              </div>
             </div>
           </div>
         </div>
@@ -43,7 +48,7 @@
 </template>
 
 <script>
-import api from '../api';
+import axios from 'axios';
 
 export default {
   name: 'MainPage',
@@ -56,7 +61,8 @@ export default {
       filteredQuery: '',
       selectedCategory: null,
       categories: [],
-      items: []
+      items: [],
+      selectedItem: null
     };
   },
   computed: {
@@ -106,6 +112,7 @@ export default {
     },
     filterByCategory(category) {
       this.selectedCategory = category;
+      this.selectedItem = null;
       this.fetchItems();
     },
     resetTimer() {
@@ -122,7 +129,7 @@ export default {
       clearInterval(this.timer);
       const userId = localStorage.getItem('userId');
       if (userId) {
-        api.post('/userlogout', { userId })
+        axios.post(`${process.env.VUE_APP_BACKEND_URL}/userlogout`, { userId })
           .then(() => {
             localStorage.removeItem('userId');
             this.$router.push('/userlogin');
@@ -133,21 +140,20 @@ export default {
       }
     },
     fetchUserName() {
-      const userId = localStorage.getItem('userId');
-      if (userId) {
-        api.get(`/username/${userId}`)
-          .then(response => {
-            this.userName = this.escapeHtml(response.data.name);
-          })
-          .catch(error => {
-            console.error('Error fetching user name:', error);
-          });
-      } else {
-        console.error('No user ID found in local storage.');
-      }
+      axios.get(`${process.env.VUE_APP_BACKEND_URL}/username`, {
+        params: {
+          userId: localStorage.getItem('userId')
+        }
+      })
+      .then(response => {
+        this.userName = this.escapeHtml(response.data.name);
+      })
+      .catch(error => {
+        console.error('Error fetching user name:', error);
+      });
     },
     fetchCategories() {
-      api.get('/categories')
+      axios.get(`${process.env.VUE_APP_BACKEND_URL}/categories`)
         .then(response => {
           this.categories = response.data.map(category => ({
             ...category,
@@ -163,12 +169,13 @@ export default {
         searchQuery: this.filteredQuery,
         categoryId: this.selectedCategory ? this.selectedCategory.id : null
       };
-      api.get('/items', { params })
+      axios.get(`${process.env.VUE_APP_BACKEND_URL}/items`, { params })
         .then(response => {
           this.items = response.data.map(item => ({
             ...item,
             name: this.escapeHtml(item.name),
-            description: this.escapeHtml(item.description)
+            description: this.escapeHtml(item.description),
+            price: this.escapeHtml(item.price)
           }));
         })
         .catch(error => {
@@ -182,7 +189,7 @@ export default {
         this.$router.push('/userlogin');
         return;
       }
-      api.post('/cart', { userId, itemId, quantity: 1 })
+      axios.post(`${process.env.VUE_APP_BACKEND_URL}/cart`, { userId, itemId, quantity: 1 })
         .then(() => {
           alert('장바구니에 추가되었습니다.');
         })
@@ -198,7 +205,7 @@ export default {
         this.$router.push('/userlogin');
         return;
       }
-      api.post('/orders', { userId, items: [{ item_id: itemId, quantity: 1 }] })
+      axios.post(`${process.env.VUE_APP_BACKEND_URL}/orders`, { userId, items: [{ item_id: itemId, quantity: 1 }] })
         .then(() => {
           alert('구매가 완료되었습니다.');
         })
@@ -206,6 +213,13 @@ export default {
           console.error('Failed to complete purchase:', error);
           alert('구매에 실패했습니다.');
         });
+    },
+    toggleItemDetails(item) {
+      if (this.selectedItem && this.selectedItem.id === item.id) {
+        this.selectedItem = null;
+      } else {
+        this.selectedItem = item;
+      }
     }
   },
   created() {
@@ -258,6 +272,28 @@ header h1 {
   font-size: 24px;
   color: #333;
 }
+.search-bar {
+  display: flex;
+  justify-content: center;
+  margin: 0 20px;
+}
+.search-bar input {
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  border-radius: 4px 0 0 4px;
+  width: 600px;
+}
+.search-bar button {
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid #007bff;
+  border-left: none;
+  background-color: #007bff;
+  color: white;
+  cursor: pointer;
+  border-radius: 0 4px 4px 0;
+}
 .user-info {
   margin-left: auto;
   display: flex;
@@ -281,57 +317,43 @@ nav.category-menu {
   border-bottom: 1px solid #ddd;
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
 }
 nav.category-menu button {
-  background-color: transparent;
+  background-color: #e0e0e0;
   border: none;
   padding: 10px 20px;
   font-size: 16px;
   cursor: pointer;
   transition: background-color 0.3s, color 0.3s;
+  color: #333;
 }
-nav.category-menu button.active, nav.category-menu button:hover {
+nav.category-menu button.active {
   background-color: #007bff;
   color: white;
 }
-main {
-  padding: 20px;
-}
-.search-bar {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 20px;
-}
-.search-bar input {
-  padding: 10px;
-  font-size: 16px;
-  border: 1px solid #ddd;
-  border-radius: 4px 0 0 4px;
-}
-.search-bar button {
-  padding: 10px;
-  font-size: 16px;
-  border: 1px solid #007bff;
-  border-left: none;
-  background-color: #007bff;
-  color: white;
-  cursor: pointer;
-  border-radius: 0 4px 4px 0;
+nav.category-menu button:hover {
+  background-color: #ccc;
 }
 .item-container {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, 250px);
   justify-content: center;
+  gap: 20px;
+  padding: 20px;
+}
+.item-wrapper {
+  position: relative;
+  width: 800px; /* Fixed width */
 }
 .item {
   background-color: #fff;
   border: 1px solid #ddd;
   border-radius: 8px;
-  margin: 10px;
-  padding: 20px;
-  width: calc(25% - 40px);
+  padding: 10px;
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
   transition: transform 0.3s, box-shadow 0.3s;
+  cursor: pointer;
 }
 .item:hover {
   transform: translateY(-5px);
@@ -344,24 +366,34 @@ main {
   border-bottom: 1px solid #ddd;
   margin-bottom: 10px;
 }
-.item .item-details {
+.item h3 {
+  font-size: 16px;
+  color: #333;
+  margin: 0;
+  text-align: center;
+}
+.item-details-container {
+  background-color: #f8f8f8;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin-top: 10px;
+  width: 190px; /* Fixed width */
+}
+.item-details {
   text-align: left;
 }
-.item .item-details h3 {
-  font-size: 18px;
-  margin: 10px 0;
-  color: #333;
-}
-.item .item-details p {
-  font-size: 14px;
+.item-details p {
+  font-size: 16px;
   color: #777;
+  margin: 10px 0;
 }
-.item .item-actions {
+.item-actions {
   display: flex;
-  justify-content: space-between;
+  gap: 10px;
 }
-.item .item-actions button {
-  padding: 10px;
+.item-actions button {
+  padding: 10px 20px;
   font-size: 14px;
   cursor: pointer;
   border: none;
@@ -370,7 +402,7 @@ main {
   border-radius: 4px;
   transition: background-color 0.3s;
 }
-.item .item-actions button:hover {
+.item-actions button:hover {
   background-color: #0056b3;
 }
 </style>
