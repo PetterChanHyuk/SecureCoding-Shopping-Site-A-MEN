@@ -93,6 +93,10 @@ export default {
       return `${process.env.VUE_APP_BACKEND_URL}/${imageUrl}`;
     },
     search() {
+      if (this.searchQuery.length > 100) {
+      alert('검색어는 최대 100자까지 입력할 수 있습니다.');
+      return;
+      }
       const validatedQuery = this.validateSearchQuery(this.searchQuery);
       if (!validatedQuery) {
         alert('Invalid search query. Please enter valid characters only.');
