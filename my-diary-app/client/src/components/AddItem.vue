@@ -15,12 +15,14 @@
             <option v-for="category in categories" :key="category.id" :value="category.id">
               {{ category.name }}
             </option>
+
           </select>
         </div>
         <input type="text" v-model="newCategory" @input="validateNewCategory" placeholder="Add new category" />
         <button type="button" @click="addCategory" :disabled="newCategoryError || !newCategory" class="add-category-btn">Add Category</button>
         <p v-if="newCategoryError" class="error-message">{{ newCategoryError }}</p>
       </div>
+
 
       <div class="form-group">
         <label for="price">Price</label>
@@ -36,7 +38,6 @@
         <label for="file">Image</label>
         <input type="file" id="file" @change="onFileChange" />
       </div>
-
       <button type="submit">추가</button>
     </form>
   </div>
@@ -96,6 +97,7 @@ export default {
           ...category,
           name: this.escapeHtml(category.name)
         }));
+
       } catch (err) {
         console.error('카테고리 목록을 불러오는 데 실패했습니다:', err);
       }
@@ -138,7 +140,6 @@ export default {
     },
     async addItem() {
       const userId = localStorage.getItem('userId'); // 사용자 ID 가져오기
-
       if (!this.itemName || !this.selectedCategoryId || !userId || this.itemNameError || !this.price) {
         alert('모든 필수 항목을 올바르게 입력해 주세요.');
         return;
@@ -240,3 +241,4 @@ export default {
   font-size: 0.9em;
 }
 </style>
+

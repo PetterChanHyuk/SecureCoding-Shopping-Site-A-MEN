@@ -363,6 +363,8 @@ async function initializeServer() {
   };
   app.use(cors(corsOptions));
   app.use(bodyParser.json());
+  app.use(cookieParser()); // CSRF 보호를 위해 쿠키 파서 추가
+  app.use(csurf({ cookie: true })); // CSRF 미들웨어 추가
   app.use('/uploads', express.static(uploadDir));
   app.use(cookieParser());
   app.use(helmet());
@@ -390,6 +392,11 @@ async function initializeServer() {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
   };
+
+  // CSRF 토큰을 클라이언트에 전달하는 라우트
+  app.get('/csrf-token', (req, res) => {
+    res.json({ csrfToken: req.csrfToken() });
+  });
 
   // 파일 업로드 라우트
   app.post('/upload', upload.single('file'), async (req, res) => {
